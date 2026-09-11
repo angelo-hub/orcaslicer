@@ -310,7 +310,11 @@ elseif (APPLE)
         message("OS X Deployment Target (inferred from SDK): ${DEP_OSX_TARGET}")
     endif ()
 
-    include("deps-macos.cmake")
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        include("deps-ios.cmake")
+    else ()
+        include("deps-macos.cmake")
+    endif ()
 elseif (MINGW)
     message(STATUS "Building for MinGW...")
     include("deps-mingw.cmake")
@@ -354,10 +358,13 @@ include(Boost/Boost.cmake)
 
 include(Cereal/Cereal.cmake)
 include(Qhull/Qhull.cmake)
-include(GLEW/GLEW.cmake)
 
-include(GLFW/GLFW.cmake)
-include(OpenCSG/OpenCSG.cmake)
+# GUI-only rendering libraries; the mobile core does not link them.
+if (NOT DEPS_IOS)
+    include(GLEW/GLEW.cmake)
+    include(GLFW/GLFW.cmake)
+    include(OpenCSG/OpenCSG.cmake)
+endif ()
 
 include(TBB/TBB.cmake)
 
@@ -375,7 +382,9 @@ include(libnoise/libnoise.cmake)
 
 include(Draco/Draco.cmake)
 
-include(FFMPEG/FFMPEG.cmake)
+if (NOT DEPS_IOS)
+    include(FFMPEG/FFMPEG.cmake)
+endif ()
 include(Assimp/Assimp.cmake)
 
 
@@ -393,7 +402,7 @@ endif()
 # so, just don't even bother
 # ...i think this is how it works? change if wrong
 set(CURL_PKG "")
-if (NOT OPENSSL_FOUND OR NOT CURL_FOUND)
+if ((NOT OPENSSL_FOUND OR NOT CURL_FOUND) AND NOT DEPS_IOS)
     include(CURL/CURL.cmake)
     set(CURL_PKG dep_CURL)
 endif ()
@@ -406,10 +415,12 @@ endif()
 
 # flatpak builds wxwidgets separately, so it is not included in the deps target
 set(WXWIDGETS_PKG "")
-include(wxWidgets/wxWidgets.cmake)
-if (NOT FLATPAK)
-    set(WXWIDGETS_PKG "dep_wxWidgets")
-endif()
+if (NOT DEPS_IOS)
+    include(wxWidgets/wxWidgets.cmake)
+    if (NOT FLATPAK)
+        set(WXWIDGETS_PKG "dep_wxWidgets")
+    endif()
+endif ()
 
 set(FREETYPE_PKG "")
 if(NOT FREETYPE_FOUND)
@@ -433,9 +444,36 @@ endif ()
 
 include(OCCT/OCCT.cmake)
 include(OpenCV/OpenCV.cmake)
-include(python3/python3.cmake)
-include(wxInspector/wxInspector.cmake)
+if (NOT DEPS_IOS)
+    include(python3/python3.cmake)
+    include(wxInspector/wxInspector.cmake)
+endif ()
 
+if (DEPS_IOS)
+# What libslic3r links, and nothing else. JPEG is listed explicitly because on the
+# desktop it only enters the build as a wxWidgets dependency.
+set(_dep_list
+    dep_Boost
+    dep_TBB
+    ${OPENSSL_PKG}
+    dep_Cereal
+    dep_Draco
+    dep_NLopt
+    dep_OpenVDB
+    dep_OpenCV
+    dep_Eigen
+    dep_CGAL
+    dep_OCCT
+    dep_Qhull
+    ${FREETYPE_PKG}
+    ${PNG_PKG}
+    ${ZLIB_PKG}
+    ${EXPAT_PKG}
+    ${JPEG_PKG}
+    dep_libnoise
+    dep_Assimp
+    )
+else ()
 set(_dep_list
     dep_Boost
     dep_TBB
@@ -471,6 +509,7 @@ else()
     # Not working, static build has different Eigen
     #list(APPEND _dep_list "dep_libigl")
 endif()
+endif ()
 
 add_custom_target(deps ALL DEPENDS ${_dep_list})
 
