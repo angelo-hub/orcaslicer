@@ -1,0 +1,8 @@
+node_modules/
+lib/
+.expo/
+ios/build/
+android/build/
+*.tsbuildinfo
+# Built by scripts/build_ios_core.sh or downloaded from CI; never committed.
+packages/orca-core/ios/OrcaCore.xcframework/

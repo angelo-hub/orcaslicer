@@ -24,4 +24,8 @@ Two constraints shape the recipes:
 
 ## Layering above the core
 
+`mobile/packages/orca-core` is the Nitro Module. Its TypeScript spec (`src/specs/OrcaCore.nitro.ts`) mirrors `Session.hpp` one to one, and nitrogen generates the C++ spec classes that `cpp/HybridOrcaSession.cpp` implements over the façade. The façade is not thread-safe, so the bridge serializes every call with one mutex per session: promise-returning methods (load presets, import, arrange, slice, export) run on Nitro's thread pool holding it, synchronous methods take it with `try_lock` and throw while a long operation holds it, and `cancel()` never takes it. Progress callbacks are void-returning JS functions, which Nitro dispatches to the JS thread, so the slice thread may call them directly.
+
+The Expo app (`mobile/apps/orca`) owns everything that is not slicing: file import, sending G-code, and fetching vendor profiles from the repository into the core's resources directory.
+
 The façade owns all access to `Print`, `Model` and the preset bundle. The renderer, when present under `src/mobile/render/`, exposes only its own vertex, camera and colour types and never includes `libslic3r`; the façade fills its buffers. Geometry therefore never crosses the JavaScript boundary: the app holds handles and sends commands.

@@ -1,0 +1,101 @@
+name: Build iOS core
+
+# Cross-compiles the slicing core (libslic3r + the mobile façade) for iOS device and
+# simulator and publishes OrcaCore.xcframework. The dependency prefix is cached on the
+# content of deps/, so only the core rebuilds on a normal push.
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'deps/**'
+      - 'deps_src/**'
+      - 'src/**'
+      - 'version.inc'
+      - 'scripts/build_ios_core.sh'
+      - '.github/workflows/build_ios.yml'
+  workflow_dispatch:
+    inputs:
+      rebuild-deps:
+        description: Ignore the cached dependency prefix and rebuild it
+        type: boolean
+        default: false
+
+jobs:
+  core:
+    name: iOS core (${{ matrix.slice }})
+    runs-on: macos-15
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [device, simulator]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+
+      - name: Install build tools
+        run: brew install ninja
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          cmake --version | head -1
+          ninja --version
+
+      - name: Restore dependency prefix
+        id: deps-cache
+        if: ${{ !inputs.rebuild-deps }}
+        uses: actions/cache@v6
+        with:
+          path: deps/build/ios-${{ matrix.slice }}/OrcaSlicer_dep
+          key: ios-deps-${{ matrix.slice }}-${{ hashFiles('deps/**', 'scripts/build_ios_core.sh') }}
+
+      - name: Build dependencies
+        if: ${{ steps.deps-cache.outputs.cache-hit != 'true' }}
+        run: ./scripts/build_ios_core.sh -d -a ${{ matrix.slice }}
+
+      - name: Build core
+        run: ./scripts/build_ios_core.sh -s -a ${{ matrix.slice }} -x
+
+      - name: Upload slice
+        uses: actions/upload-artifact@v6
+        with:
+          name: orca-core-ios-${{ matrix.slice }}
+          path: build/ios-xcframework
+          if-no-files-found: error
+
+  xcframework:
+    name: OrcaCore.xcframework
+    needs: core
+    runs-on: macos-15
+    steps:
+      - name: Download slices
+        uses: actions/download-artifact@v7
+        with:
+          pattern: orca-core-ios-*
+          path: slices
+
+      - name: Create XCFramework
+        run: |
+          set -e
+          args=()
+          for slice in device simulator; do
+            lib="slices/orca-core-ios-$slice/libOrcaCore-$slice.a"
+            test -f "$lib"
+            args+=(-library "$lib" -headers "slices/orca-core-ios-$slice/include")
+          done
+          rm -rf out && mkdir out
+          xcodebuild -create-xcframework "${args[@]}" -output out/OrcaCore.xcframework
+          du -sh out/OrcaCore.xcframework
+
+      - name: Upload XCFramework
+        uses: actions/upload-artifact@v6
+        with:
+          name: OrcaCore.xcframework
+          path: out/OrcaCore.xcframework
+          if-no-files-found: error

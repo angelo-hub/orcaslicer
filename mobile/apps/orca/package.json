@@ -1,0 +1,35 @@
+{
+  "name": "orca-app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "OrcaSlicer mobile app",
+  "license": "AGPL-3.0-or-later",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.21",
+    "expo-constants": "~57.0.17",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.6",
+    "expo-linking": "~57.0.9",
+    "expo-router": "~57.0.20",
+    "expo-sharing": "~57.0.18",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-nitro-modules": "0.37.1",
+    "react-native-orca-core": "workspace:*",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "typescript": "^5.9.3"
+  }
+}
