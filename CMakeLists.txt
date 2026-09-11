@@ -124,8 +124,9 @@ if (ORCA_MOBILE)
     set(SLIC3R_STATIC 1 CACHE BOOL "" FORCE)
     set(ORCA_BUILD_PYTHON_STUBGEN_MODULE OFF CACHE BOOL "" FORCE)
     set(SLIC3R_BUILD_SANDBOXES OFF CACHE BOOL "" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ORCA_TOOLS OFF CACHE BOOL "" FORCE)
+    # BUILD_TESTS stays available: on a desktop host it builds the façade tests. The
+    # iOS build is a cross build, which disables tests below.
 endif ()
 set(ORCA_BUNDLED_UV_EXECUTABLE "" CACHE FILEPATH "Path to a uv executable to bundle for Python package installation. Leave empty to auto-download.")
 

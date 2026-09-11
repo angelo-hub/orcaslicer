@@ -9,10 +9,15 @@ project(libslic3r_mobile)
 add_library(libslic3r_mobile STATIC
     core/OrcaMobile.cpp
     core/OrcaMobile.hpp
+    core/Session.cpp
+    core/Session.hpp
 )
 
 target_include_directories(libslic3r_mobile PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(libslic3r_mobile PUBLIC libslic3r)
+target_link_libraries(libslic3r_mobile
+    PUBLIC  libslic3r
+    PRIVATE nlohmann_json
+)
 
 if (COMMAND encoding_check)
     encoding_check(libslic3r_mobile)

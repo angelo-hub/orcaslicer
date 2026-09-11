@@ -7,9 +7,9 @@ OrcaSlicer's slicing engine, `libslic3r`, has no dependency on wxWidgets or Open
 `ORCA_MOBILE=ON` on the root CMake project builds:
 
 - `libslic3r` and the in-tree libraries it links (`deps_src/`), unchanged.
-- `libslic3r_mobile` (`src/mobile/core/`), the façade. It is the only public surface of the mobile library: plain C++17, no platform or toolkit includes, so the same code serves iOS and Android.
+- `libslic3r_mobile` (`src/mobile/core/`), the façade. It is the only public surface of the mobile library: plain C++17, no platform or toolkit includes, so the same code serves iOS and Android. `Session` is one project: the preset bundle, the model and the print, with synchronous slicing that the bridge runs on its own worker thread and a `cancel()` that is safe from any thread. Option metadata comes out as JSON so the app can generate its parameter editor from `PrintConfigDef` instead of hand-writing forms.
 
-It does not build the GUI library, the CLI executable, the embedded Python runtime, the developer tools, sandboxes or tests. The in-tree libraries that only the GUI uses (`hidapi`, `imguizmo`, the `hints` tool) are skipped as well. Everything else in the root project is left as it is; when the option is off the desktop builds are unaffected.
+It does not build the GUI library, the CLI executable, the embedded Python runtime, the developer tools or sandboxes. The in-tree libraries that only the GUI uses (`hidapi`, `imguizmo`, the `hints` tool) are skipped as well. Everything else in the root project is left as it is; when the option is off the desktop builds are unaffected. `BUILD_TESTS` still works on a desktop host and adds the `tests/mobile` suite, which slices a real model through the façade against the shipped vendor profiles.
 
 `scripts/build_ios_core.sh` drives the two-stage build for iOS and merges the static archives of one or more slices (device, simulator) into `OrcaCore.xcframework`, whose headers are the façade's headers only.
 
