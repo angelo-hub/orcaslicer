@@ -551,8 +551,11 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
 
-    find_package(DBus REQUIRED)
-    include_directories(SYSTEM ${DBUS_INCLUDE_DIRS})
+    # D-Bus backs the desktop integration in the GUI; the mobile core has none.
+    if (NOT ORCA_MOBILE)
+        find_package(DBus REQUIRED)
+        include_directories(SYSTEM ${DBUS_INCLUDE_DIRS})
+    endif ()
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUXX)

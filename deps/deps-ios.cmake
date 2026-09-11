@@ -8,8 +8,9 @@
 #   -DCMAKE_OSX_DEPLOYMENT_TARGET=<min iOS version>
 # scripts/build_ios_core.sh is the intended driver and builds one slice per invocation.
 #
-# Every dependency is built static. The mobile dependency list (see deps/CMakeLists.txt)
-# leaves out the GUI, network-host and plugin libraries the slicing core does not link.
+# Every dependency is built static. DEPS_MOBILE is forced on: the dependency list (see
+# deps/CMakeLists.txt) leaves out the GUI, network-host and plugin libraries the slicing
+# core does not link.
 
 if (NOT CMAKE_OSX_SYSROOT)
     message(FATAL_ERROR "iOS deps: set CMAKE_OSX_SYSROOT to iphoneos or iphonesimulator")
@@ -22,6 +23,8 @@ endif ()
 
 set(DEPS_IOS TRUE)
 set(DEPS_IOS_ARCH "${CMAKE_OSX_ARCHITECTURES}")
+# Only the core's dependencies exist for iOS.
+set(DEPS_MOBILE ON)
 
 # project() resolves a sysroot name such as "iphoneos" to the full SDK path. Resolve it
 # here as well so the autotools recipes (GMP, MPFR) and OpenSSL get an -isysroot flag.

@@ -15,12 +15,12 @@ It does not build the GUI library, the CLI executable, the embedded Python runti
 
 ## Dependencies
 
-The dependency superbuild in `deps/` gains a platform file, `deps-ios.cmake`, selected when `CMAKE_SYSTEM_NAME` is `iOS`. It forwards the iOS description (system name, sysroot, architecture, deployment target) to every CMake-based dependency, since ExternalProject does not forward it, and sets the flags the autotools and OpenSSL recipes need. A separate dependency list, `DEPS_IOS`, leaves out what the core does not link: wxWidgets, GLEW, GLFW, OpenCSG, libcurl, FFmpeg, Python and wxInspector.
+The dependency superbuild in `deps/` gains a platform file, `deps-ios.cmake`, selected when `CMAKE_SYSTEM_NAME` is `iOS`. It forwards the iOS description (system name, sysroot, architecture, deployment target) to every CMake-based dependency, since ExternalProject does not forward it, and sets the flags the autotools and OpenSSL recipes need. `DEPS_MOBILE`, forced on for iOS and available on any host, selects a dependency list that leaves out what the core does not link: wxWidgets, GLEW, GLFW, OpenCSG, libcurl, FFmpeg, Python and wxInspector. A desktop host builds that list to compile the core and run the façade tests natively.
 
 Two constraints shape the recipes:
 
 - CMake's built-in iOS support restricts `find_package` to the SDK. The deps prefix is added as a find root with mode `BOTH` so dependencies and the core still find each other, while `CMAKE_IGNORE_PREFIX_PATH` keeps host package managers out.
-- Nothing built for iOS can execute on the build host. Recipes that run generated programs during their own build (OpenEXR's lookup-table generators, needed by OpenVDB's `Half` type) need pre-generated inputs on iOS.
+- Nothing built for iOS can execute on the build host, so no recipe may run a program it just compiled. The autotools recipes are configured with an explicit `--host` for the same reason.
 
 ## Layering above the core
 
