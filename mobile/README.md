@@ -23,6 +23,7 @@ cd mobile
 pnpm install
 pnpm specs                     # nitrogen: regenerates packages/orca-core/nitrogen/generated
 pnpm typecheck
+pnpm --filter orca-app test   # unit tests for the app's pure helpers (Node's test runner)
 cd apps/orca
 pnpm expo prebuild --platform ios
 pnpm expo run:ios --device     # or open ios/OrcaSlicer.xcworkspace in Xcode
@@ -43,3 +44,18 @@ archive an unsigned IPA with `xcodebuild -exportArchive` and let AltStore sign i
 - `cpp/` implements the Hybrid Objects over the façade. Every call that can take longer
   than a frame returns a promise and runs on the session's worker thread.
 - `NitroOrcaCore.podspec` links the xcframework and adds the generated sources.
+
+## Façade tests on the desktop
+
+The façade (`src/mobile/core`) and its suite (`tests/mobile`) build on macOS or Linux
+against a normal desktop dependency prefix, which already contains everything the mobile
+list needs:
+
+```sh
+cmake -S . -B build/mobile-host -G Ninja -DORCA_MOBILE=ON -DBUILD_TESTS=1 \
+  -DCMAKE_PREFIX_PATH="$PWD/deps/build/arm64/OrcaSlicer_dep/usr/local"
+cmake --build build/mobile-host --target mobile_tests
+ctest --test-dir build/mobile-host/tests/mobile --output-on-failure
+```
+
+This is the quickest way to compile and exercise the façade before an iOS build.

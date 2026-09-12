@@ -11,7 +11,9 @@ export default function RootLayout(): React.JSX.Element {
       <Stack>
         <Stack.Screen name="index" options={{ title: 'OrcaSlicer' }} />
         <Stack.Screen name="presets/[kind]" options={{ title: 'Presets' }} />
+        <Stack.Screen name="settings/[kind]" options={{ title: 'Settings' }} />
         <Stack.Screen name="vendors" options={{ title: 'Printer profiles' }} />
+        <Stack.Screen name="printers" options={{ title: 'Printers' }} />
       </Stack>
     </CoreProvider>
   )

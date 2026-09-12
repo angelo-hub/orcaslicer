@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, View } 
 import type { ObjectInfo, PresetKind, SliceResult, SliceStatistics } from 'react-native-orca-core'
 
 import { useCore } from '@/lib/core'
+import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
 import { installedVendors, nativePath } from '@/lib/profiles'
 
 const PRESET_KINDS: Array<{ kind: PresetKind; label: string }> = [
@@ -30,6 +31,8 @@ export default function HomeScreen(): React.JSX.Element {
   const [stats, setStats] = useState<SliceStatistics | null>(null)
   const [gcodePath, setGcodePath] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [printers, setPrinters] = useState<PrinterHost[]>([])
 
   const refresh = useCallback(() => {
     if (session === null || session.isBusy) return
@@ -42,7 +45,10 @@ export default function HomeScreen(): React.JSX.Element {
   }, [session])
 
   useEffect(() => {
-    if (ready) refresh()
+    if (ready) {
+      refresh()
+      setPrinters(loadPrinters())
+    }
   }, [ready, refresh])
 
   const importModel = useCallback(async () => {
@@ -93,6 +99,43 @@ export default function HomeScreen(): React.JSX.Element {
     await Sharing.shareAsync('file://' + gcodePath, { mimeType: 'text/x-gcode', dialogTitle: 'Send G-code' })
   }, [gcodePath])
 
+  const sendTo = useCallback(
+    async (host: PrinterHost, startPrint: boolean) => {
+      if (gcodePath === null) return
+      setSending(true)
+      try {
+        const filename = `${objects[0]?.name.replace(/\.[^.]+$/, '') ?? 'plate'}_${Date.now().toString(36)}.gcode`
+        await clientFor(host).upload(host, { path: gcodePath, filename, startPrint })
+        Alert.alert(startPrint ? 'Print started' : 'Uploaded', `${filename} on ${host.name}`)
+      } catch (error) {
+        Alert.alert(`Could not send to ${host.name}`, String(error))
+      } finally {
+        setSending(false)
+      }
+    },
+    [gcodePath, objects]
+  )
+
+  const send = useCallback(
+    (startPrint: boolean) => {
+      const current = loadPrinters()
+      setPrinters(current)
+      if (current.length === 0) {
+        Alert.alert('No printers', 'Add a printer first.')
+        return
+      }
+      if (current.length === 1 && current[0] !== undefined) {
+        void sendTo(current[0], startPrint)
+        return
+      }
+      Alert.alert('Send to', undefined, [
+        ...current.map((host) => ({ text: host.name, onPress: () => void sendTo(host, startPrint) })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ])
+    },
+    [sendTo]
+  )
+
   if (!ready || session === null) {
     return (
       <View style={styles.center}>
@@ -122,9 +165,16 @@ export default function HomeScreen(): React.JSX.Element {
       <View style={styles.card}>
         <Text style={styles.title}>Presets</Text>
         {PRESET_KINDS.map(({ kind, label }) => (
-          <Link key={kind} href={{ pathname: '/presets/[kind]', params: { kind } }} asChild>
-            <Button title={`${label}: ${selected[kind] || 'none'}`} disabled={busy} />
-          </Link>
+          <View key={kind} style={styles.row}>
+            <View style={styles.grow}>
+              <Link href={{ pathname: '/presets/[kind]', params: { kind } }} asChild>
+                <Button title={`${label}: ${selected[kind] || 'none'}`} disabled={busy} />
+              </Link>
+            </View>
+            <Link href={{ pathname: '/settings/[kind]', params: { kind } }} asChild>
+              <Button title="Edit" disabled={busy} />
+            </Link>
+          </View>
         ))}
       </View>
 
@@ -189,9 +239,22 @@ export default function HomeScreen(): React.JSX.Element {
             <Text>
               Filament {stats.filamentGrams.toFixed(1)} g, {stats.layerCount} layers
             </Text>
-            <Button title="Send G-code" onPress={share} disabled={gcodePath === null} />
+            <Button title="Share G-code" onPress={share} disabled={gcodePath === null} />
+            <Button title="Upload to printer" onPress={() => send(false)} disabled={gcodePath === null || sending} />
+            <Button title="Upload and print" onPress={() => send(true)} disabled={gcodePath === null || sending} />
           </View>
         ) : null}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.title}>Printers</Text>
+        <Text style={styles.muted}>{printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(', ')}</Text>
+        <Link href="/printers" asChild>
+          <Button title="Manage printers" />
+        </Link>
+        <Link href="/vendors" asChild>
+          <Button title="Printer profiles" />
+        </Link>
       </View>
     </ScrollView>
   )

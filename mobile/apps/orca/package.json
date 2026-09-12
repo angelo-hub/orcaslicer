@@ -10,7 +10,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "prebuild": "expo prebuild",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "expo": "~57.0.21",
