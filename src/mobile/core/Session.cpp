@@ -256,7 +256,7 @@ std::string Session::option_definitions_json()
         j["key"]      = key;
         j["kind"]     = kind_of(key);
         j["type"]     = type_name(def.type);
-        j["vector"]   = def.is_vector();
+        j["vector"]   = (def.type & coVectorType) != 0;
         j["nullable"] = def.nullable;
         j["readonly"] = def.readonly;
         j["label"]    = def.label;
@@ -460,7 +460,7 @@ MeshData Session::mesh(unsigned long id) const
     out.triangles = static_cast<unsigned long>(its.indices.size());
     out.positions.reserve(its.indices.size() * 9);
     out.normals.reserve(its.indices.size() * 9);
-    for (const Vec3i& face : its.indices) {
+    for (const stl_triangle_vertex_indices& face : its.indices) {
         const Vec3f& a = its.vertices[face(0)];
         const Vec3f& b = its.vertices[face(1)];
         const Vec3f& c = its.vertices[face(2)];
