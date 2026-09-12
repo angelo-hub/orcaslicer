@@ -1,0 +1,59 @@
+// Printer hosts the app can send G-code to. Both speak plain HTTP, so they live in the
+// app rather than in the native core.
+
+export type PrinterHostKind = 'moonraker' | 'octoprint'
+
+export interface PrinterHost {
+  /** Stable id, generated when the printer is added. */
+  id: string
+  name: string
+  kind: PrinterHostKind
+  /** Base URL including scheme, e.g. http://voron.local or http://192.168.1.20:7125. */
+  url: string
+  /** Moonraker: optional API key. OctoPrint: required application key. */
+  apiKey?: string
+}
+
+export interface PrinterStatus {
+  /** Free text from the host: printing, paused, ready, error, offline. */
+  state: string
+  /** 0 to 1 while a job runs. */
+  progress?: number
+  /** Current job file name. */
+  file?: string
+  nozzleTemperature?: number
+  nozzleTarget?: number
+  bedTemperature?: number
+  bedTarget?: number
+}
+
+export interface UploadOptions {
+  /** Absolute path of the G-code on device. */
+  path: string
+  /** Name the host stores the file under. */
+  filename: string
+  /** Start printing after the upload. */
+  startPrint: boolean
+}
+
+export interface PrinterClient {
+  /** Resolves to the host's own name or version text; rejects when unreachable. */
+  info(host: PrinterHost): Promise<string>
+  status(host: PrinterHost): Promise<PrinterStatus>
+  upload(host: PrinterHost, options: UploadOptions): Promise<void>
+}
+
+/** Base URL with no trailing slash. */
+export function normalizeUrl(url: string): string {
+  let out = url.trim()
+  if (!/^https?:\/\//i.test(out)) {
+    out = 'http://' + out
+  }
+  return out.replace(/\/+$/, '')
+}
+
+/** A React Native fetch() body part for a file on disk. */
+export function filePart(path: string, filename: string, type = 'text/x-gcode'): Blob {
+  // React Native's FormData accepts { uri, name, type } objects; the DOM typing does not.
+  return { uri: 'file://' + path, name: filename, type } as unknown as Blob
+}

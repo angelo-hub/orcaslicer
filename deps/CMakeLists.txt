@@ -123,6 +123,11 @@ if (APPLE)
     endif ()
     set(CMAKE_FIND_FRAMEWORK LAST)
     set(CMAKE_FIND_APPBUNDLE LAST)
+    # CMake leaves CMAKE_SYSTEM_PROCESSOR empty for iOS; the single target architecture
+    # is what the checks below and the autotools recipes mean by it.
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT CMAKE_SYSTEM_PROCESSOR)
+        set(CMAKE_SYSTEM_PROCESSOR "${CMAKE_OSX_ARCHITECTURES}")
+    endif ()
     list(FIND CMAKE_OSX_ARCHITECTURES ${CMAKE_SYSTEM_PROCESSOR} _arch_idx)
     message(STATUS "prusaslicer_add_cmake_project for Apple")
     if (CMAKE_OSX_ARCHITECTURES AND _arch_idx LESS 0)

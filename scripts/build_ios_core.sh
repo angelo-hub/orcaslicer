@@ -117,6 +117,7 @@ build_deps() {
                     -DCMAKE_SYSTEM_NAME=iOS \
                     -DCMAKE_OSX_SYSROOT="$SDK" \
                     -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+                    -DCMAKE_SYSTEM_PROCESSOR="$ARCH" \
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION" \
                     -DCMAKE_IGNORE_PREFIX_PATH="$CMAKE_IGNORE_PREFIX_PATH" \
                     $CMAKE_POLICY_COMPAT
@@ -145,6 +146,7 @@ build_core() {
                     -DCMAKE_SYSTEM_NAME=iOS \
                     -DCMAKE_OSX_SYSROOT="$SDK" \
                     -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+                    -DCMAKE_SYSTEM_PROCESSOR="$ARCH" \
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION" \
                     -DCMAKE_PREFIX_PATH="$DEPS_PREFIX" \
                     -DCMAKE_FIND_ROOT_PATH="$DEPS_PREFIX" \

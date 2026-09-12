@@ -1,5 +1,6 @@
 node_modules/
-lib/
+# Build output of the Nitro package (tsc); the app's lib/ is source.
+packages/*/lib/
 .expo/
 ios/build/
 android/build/
