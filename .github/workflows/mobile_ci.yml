@@ -1,0 +1,59 @@
+name: Mobile app checks
+
+# The JavaScript side of the mobile port: dependency install, nitrogen output up to date,
+# TypeScript typecheck of the Nitro module and the Expo app, the app's unit tests, and the
+# translation catalog build. Needs no Apple toolchain, so it runs on every push.
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'mobile/**'
+      - 'localization/i18n/**'
+      - 'src/libslic3r/**'
+      - '.github/workflows/mobile_ci.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: mobile/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Nitrogen output is committed and current
+        run: |
+          pnpm specs
+          git diff --exit-code -- packages/orca-core/nitrogen
+
+      - name: Translation catalogs
+        run: pnpm i18n
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm --filter orca-app test
