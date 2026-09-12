@@ -22,6 +22,7 @@ BUILD_CONFIG="Release"
 IOS_MIN_VERSION="16.0"
 BUILD_ONLY=""
 MAKE_XCFRAMEWORK=""
+RESUME=""
 
 usage() {
     echo "Usage: ./scripts/build_ios_core.sh [options]"
@@ -32,11 +33,13 @@ usage() {
     echo "   -c: CMake build configuration (default: ${BUILD_CONFIG})"
     echo "   -b: Build without reconfiguring CMake"
     echo "   -j: Parallel build jobs (CMAKE_BUILD_PARALLEL_LEVEL)"
+    echo "   -r: Resume deps from a restored prefix and stamps without sources: every"
+    echo "       dependency with a pending step is rebuilt from scratch"
     echo "   -x: After building, merge the slices into build/ios-xcframework/OrcaCore.xcframework"
     echo "   -h: This help"
 }
 
-while getopts ":dsa:t:c:bj:xh" opt; do
+while getopts ":dsa:t:c:bj:rxh" opt; do
     case "${opt}" in
         d ) BUILD_TARGET="deps" ;;
         s ) BUILD_TARGET="core" ;;
@@ -45,6 +48,7 @@ while getopts ":dsa:t:c:bj:xh" opt; do
         c ) BUILD_CONFIG="$OPTARG" ;;
         b ) BUILD_ONLY="1" ;;
         j ) export CMAKE_BUILD_PARALLEL_LEVEL="$OPTARG" ;;
+        r ) RESUME="1" ;;
         x ) MAKE_XCFRAMEWORK="1" ;;
         h ) usage; exit 0 ;;
         * ) usage; exit 1 ;;
@@ -122,10 +126,34 @@ build_deps() {
                     -DCMAKE_IGNORE_PREFIX_PATH="$CMAKE_IGNORE_PREFIX_PATH" \
                     $CMAKE_POLICY_COMPAT
             fi
+            if [ "1" == "$RESUME" ]; then
+                resume_deps
+            fi
             # Keep going past a failing dependency so one run reports every failure.
             cmake --build . --target deps -- -k 0
         )
     done
+}
+
+# resume_deps: the CI cache holds the installed prefix and the ExternalProject stamps
+# of every dependency, not their source or build trees. A dependency that still has a
+# step to run (it failed, its recipe changed, or something it depends on was rebuilt)
+# cannot resume from that; it is removed so that it downloads and builds from scratch,
+# while the untouched ones stay installed. Runs in the configured deps build directory.
+resume_deps() {
+    local pending
+    pending=$(cmake --build . --target deps -- -n 2>/dev/null | grep -oE 'dep_[A-Za-z0-9]+-prefix' | sort -u || true)
+    if [ -z "$pending" ]; then
+        echo "Every dependency is up to date."
+        return
+    fi
+    for prefix in $pending; do
+        echo "Rebuilding ${prefix%-prefix} from scratch"
+        rm -rf "$prefix"
+    done
+    # The superbuild's configure step writes the per-dependency command files that the
+    # build reads from the removed directories; generate them again.
+    cmake .
 }
 
 build_core() {
