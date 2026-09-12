@@ -6,12 +6,13 @@
   "license": "AGPL-3.0-or-later",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "ios": "expo run:ios",
-    "android": "expo run:android",
-    "prebuild": "expo prebuild",
+    "start": "pnpm i18n && expo start",
+    "ios": "pnpm i18n && expo run:ios",
+    "android": "pnpm i18n && expo run:android",
+    "prebuild": "pnpm i18n && expo prebuild",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test \"lib/**/*.test.ts\""
+    "test": "node --experimental-strip-types --test \"lib/**/*.test.ts\"",
+    "i18n": "node ../../scripts/i18n.mjs"
   },
   "dependencies": {
     "expo": "~57.0.21",

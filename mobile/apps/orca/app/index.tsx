@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, View } 
 import type { ObjectInfo, PresetKind, SliceResult, SliceStatistics } from 'react-native-orca-core'
 
 import { useCore } from '@/lib/core'
+import { t } from '@/lib/i18n'
 import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
 import { installedVendors, nativePath } from '@/lib/profiles'
 
@@ -218,7 +219,7 @@ export default function HomeScreen(): React.JSX.Element {
           <View style={styles.row}>
             <ActivityIndicator />
             <Text style={styles.grow}>
-              {progress.percent}% {progress.message}
+              {progress.percent}% {t(progress.message)}
             </Text>
             <Button title="Cancel" onPress={() => session.cancel()} />
           </View>

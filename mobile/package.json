@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "specs": "pnpm --filter react-native-orca-core specs"
+    "specs": "pnpm --filter react-native-orca-core specs",
+    "i18n": "node scripts/i18n.mjs"
   }
 }

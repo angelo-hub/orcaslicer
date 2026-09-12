@@ -4,6 +4,7 @@ import { Button, FlatList, Modal, Pressable, StyleSheet, Switch, Text, TextInput
 import { getOptionDefinitions, type OptionDefinition, type OrcaSession, type PresetKind } from 'react-native-orca-core'
 
 import { useSession } from '@/lib/core'
+import { t } from '@/lib/i18n'
 import {
   decodeBool,
   decodePercent,
@@ -53,7 +54,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
   )
 
   const scalar = decodeScalar(def, serialized)
-  const label = def.label !== '' ? def.label : def.key
+  const label = def.label !== '' ? t(def.label) : def.key
 
   let editor: React.JSX.Element
   switch (kind) {
@@ -62,7 +63,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
       break
     case 'enum': {
       const index = def.enumValues?.indexOf(scalar) ?? -1
-      const shown = index >= 0 ? (def.enumLabels?.[index] ?? scalar) : scalar
+      const shown = index >= 0 ? t(def.enumLabels?.[index] ?? scalar) : scalar
       editor = (
         <View>
           <Button title={shown === '' ? 'Choose' : shown} disabled={def.readonly} onPress={() => setPicking(true)} />
@@ -78,7 +79,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
                     setPicking(false)
                     commit(encodeScalar(def, serialized, item))
                   }}>
-                  <Text style={[styles.value, item === scalar && styles.selected]}>{def.enumLabels?.[i] ?? item}</Text>
+                  <Text style={[styles.value, item === scalar && styles.selected]}>{t(def.enumLabels?.[i] ?? item)}</Text>
                 </Pressable>
               )}
               ListFooterComponent={<Button title="Cancel" onPress={() => setPicking(false)} />}
@@ -114,7 +115,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
               setDraft(null)
             }}
           />
-          {def.unit !== '' ? <Text style={styles.unit}>{def.unit}</Text> : null}
+          {def.unit !== '' ? <Text style={styles.unit}>{t(def.unit)}</Text> : null}
           {isPercent ? <Text style={styles.unit}>%</Text> : null}
         </View>
       )
@@ -131,7 +132,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
         </Text>
         {def.tooltip !== '' ? (
           <Text style={styles.tooltip} numberOfLines={3}>
-            {def.tooltip}
+            {t(def.tooltip)}
           </Text>
         ) : null}
         {error ? <Text style={styles.error}>Not a valid value for this option</Text> : null}
@@ -198,7 +199,7 @@ export default function SettingsScreen(): React.JSX.Element {
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <Pressable onPress={() => setCategory(item)} style={[styles.modeChip, category === item && styles.modeChipActive]}>
-              <Text style={category === item ? styles.modeTextActive : styles.modeText}>{item ?? 'All'}</Text>
+              <Text style={category === item ? styles.modeTextActive : styles.modeText}>{item === null ? 'All' : t(item)}</Text>
             </Pressable>
           )}
         />
@@ -210,7 +211,7 @@ export default function SettingsScreen(): React.JSX.Element {
         ListEmptyComponent={<Text style={styles.tooltip}>No settings match</Text>}
         renderItem={({ item }) =>
           'header' in item ? (
-            <Text style={styles.header}>{item.header}</Text>
+            <Text style={styles.header}>{t(item.header)}</Text>
           ) : (
             <OptionRow def={item.def} session={session} modified={modified.has(item.def.key)} onChanged={onChanged} />
           )

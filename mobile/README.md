@@ -24,6 +24,7 @@ pnpm install
 pnpm specs                     # nitrogen: regenerates packages/orca-core/nitrogen/generated
 pnpm typecheck
 pnpm --filter orca-app test   # unit tests for the app's pure helpers (Node's test runner)
+pnpm i18n                      # translation catalogs from localization/i18n (also run by start/ios/prebuild)
 cd apps/orca
 pnpm expo prebuild --platform ios
 pnpm expo run:ios --device     # or open ios/OrcaSlicer.xcworkspace in Xcode
