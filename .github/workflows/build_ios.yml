@@ -1,8 +1,13 @@
 name: Build iOS core
 
 # Cross-compiles the slicing core (libslic3r + the mobile façade) for iOS device and
-# simulator and publishes OrcaCore.xcframework. The dependency prefix is cached on the
-# content of deps/, so only the core rebuilds on a normal push.
+# simulator and publishes OrcaCore.xcframework.
+#
+# The dependency build is resumable across runs: the prefix, the ExternalProject stamps
+# and the download cache are saved after every run, even a failed one, and restored on
+# the next. A restored cache records the commit it was built from; the stamps of every
+# recipe that changed since then are removed so those dependencies (and their
+# dependents) rebuild, while untouched ones are reused.
 
 on:
   push:
@@ -32,11 +37,14 @@ jobs:
       fail-fast: false
       matrix:
         slice: [device, simulator]
+    env:
+      DEPS_DIR: deps/build/ios-${{ matrix.slice }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           lfs: 'false'
+          fetch-depth: 0
 
       - name: Install build tools
         run: brew install ninja
@@ -47,17 +55,70 @@ jobs:
           cmake --version | head -1
           ninja --version
 
-      - name: Restore dependency prefix
+      - name: Restore dependency build
         id: deps-cache
         if: ${{ !inputs.rebuild-deps }}
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v5
         with:
-          path: deps/build/ios-${{ matrix.slice }}/OrcaSlicer_dep
-          key: ios-deps-${{ matrix.slice }}-${{ hashFiles('deps/**', 'scripts/build_ios_core.sh') }}
+          path: |
+            ${{ env.DEPS_DIR }}/OrcaSlicer_dep
+            ${{ env.DEPS_DIR }}/*-prefix/src/*-stamp
+            ${{ env.DEPS_DIR }}/*-prefix/tmp
+            ${{ env.DEPS_DIR }}/deps-cache-commit
+            deps/DL_CACHE
+          key: ios-deps-${{ matrix.slice }}-${{ github.run_id }}
+          restore-keys: |
+            ios-deps-${{ matrix.slice }}-
+
+      - name: Invalidate changed recipes
+        if: ${{ steps.deps-cache.outputs.cache-matched-key != '' }}
+        run: |
+          set -e
+          commit_file="$DEPS_DIR/deps-cache-commit"
+          if [ ! -f "$commit_file" ]; then
+            echo "No commit recorded with the cache; rebuilding every dependency"
+            rm -rf "$DEPS_DIR"/*-prefix
+            exit 0
+          fi
+          base=$(cat "$commit_file")
+          echo "Cache was built at $base"
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Commit unknown to this checkout; rebuilding every dependency"
+            rm -rf "$DEPS_DIR"/*-prefix
+            exit 0
+          fi
+          changed=$(git diff --name-only "$base" HEAD -- deps/ scripts/build_ios_core.sh)
+          echo "Changed since then:"; echo "$changed"
+          if echo "$changed" | grep -qE '^(deps/[^/]+\.cmake|deps/CMakeLists\.txt|scripts/build_ios_core\.sh)$'; then
+            echo "Shared build settings changed; rebuilding every dependency"
+            rm -rf "$DEPS_DIR"/*-prefix
+            exit 0
+          fi
+          for recipe in $(echo "$changed" | sed -nE 's#^deps/([^/]+)/.*#\1#p' | sort -u); do
+            echo "Recipe $recipe changed; its stamps are removed"
+            rm -rf "$DEPS_DIR/dep_$recipe-prefix"
+          done
 
       - name: Build dependencies
-        if: ${{ steps.deps-cache.outputs.cache-hit != 'true' }}
         run: ./scripts/build_ios_core.sh -d -a ${{ matrix.slice }}
+
+      - name: Record the commit the dependency build matches
+        if: always()
+        run: |
+          mkdir -p "$DEPS_DIR"
+          git rev-parse HEAD > "$DEPS_DIR/deps-cache-commit"
+
+      - name: Save dependency build
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ env.DEPS_DIR }}/OrcaSlicer_dep
+            ${{ env.DEPS_DIR }}/*-prefix/src/*-stamp
+            ${{ env.DEPS_DIR }}/*-prefix/tmp
+            ${{ env.DEPS_DIR }}/deps-cache-commit
+            deps/DL_CACHE
+          key: ios-deps-${{ matrix.slice }}-${{ github.run_id }}
 
       - name: Build core
         run: ./scripts/build_ios_core.sh -s -a ${{ matrix.slice }} -x

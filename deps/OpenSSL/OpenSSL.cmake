@@ -36,8 +36,9 @@ if(WIN32)
 else()
     if(DEPS_IOS)
         # The ios*-xcrun targets pick the SDK and compiler through xcrun; only the
-        # architecture and minimum version have to be added.
-        set(_conf_cmd ./Configure -arch ${DEPS_IOS_ARCH} ${DEPS_IOS_MIN_VERSION_FLAG})
+        # architecture and minimum version have to be added. They go through CFLAGS:
+        # Configure reads a bare "-arch arm64" as a second target name.
+        set(_conf_cmd env "CFLAGS=-arch ${DEPS_IOS_ARCH} ${DEPS_IOS_MIN_VERSION_FLAG}" ./Configure)
     elseif(APPLE)
         set(_conf_cmd export MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} && ./Configure -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})
     else()

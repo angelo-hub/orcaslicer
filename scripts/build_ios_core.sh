@@ -122,7 +122,8 @@ build_deps() {
                     -DCMAKE_IGNORE_PREFIX_PATH="$CMAKE_IGNORE_PREFIX_PATH" \
                     $CMAKE_POLICY_COMPAT
             fi
-            cmake --build . --target deps
+            # Keep going past a failing dependency so one run reports every failure.
+            cmake --build . --target deps -- -k 0
         )
     done
 }
