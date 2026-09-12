@@ -3,13 +3,19 @@ import { File, Paths } from 'expo-file-system'
 import { Link } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import React, { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { OrcaViewport, type ObjectInfo, type PresetKind, type SliceResult, type SliceStatistics, type ViewportMode } from 'react-native-orca-core'
 
+import { Button } from '@/components/Button'
+import { Card } from '@/components/Card'
+import { PresetRow } from '@/components/PresetRow'
+import { ProgressBar } from '@/components/ProgressBar'
+import { SegmentedControl } from '@/components/SegmentedControl'
 import { useCore } from '@/lib/core'
 import { t } from '@/lib/i18n'
 import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
 import { installedVendors, nativePath } from '@/lib/profiles'
+import { radius, spacing, typography, useTheme } from '@/lib/theme'
 
 const PRESET_KINDS: Array<{ kind: PresetKind; label: string }> = [
   { kind: 'printer', label: 'Printer' },
@@ -24,6 +30,7 @@ function formatDuration(seconds: number): string {
 }
 
 export default function HomeScreen(): React.JSX.Element {
+  const { colors } = useTheme()
   const { version, session, presetError, ready } = useCore()
   const [objects, setObjects] = useState<ObjectInfo[]>([])
   const [selected, setSelected] = useState<Record<PresetKind, string>>({ printer: '', filament: '', process: '' })
@@ -39,14 +46,21 @@ export default function HomeScreen(): React.JSX.Element {
   const [revision, setRevision] = useState(0)
 
   const refresh = useCallback(() => {
-    if (session === null || session.isBusy) return
-    setRevision((r) => r + 1)
-    setObjects(session.objects())
-    setSelected({
-      printer: session.selectedPreset('printer'),
-      filament: session.selectedPreset('filament'),
-      process: session.selectedPreset('process'),
-    })
+    if (session === null) return
+    // Do not gate on session.isBusy: on Nitro, the mutex can appear locked
+    // for a microtask after the awaited promise resolves, and skipping here
+    // would leave the UI stale until the next unrelated re-render.
+    try {
+      setRevision((r) => r + 1)
+      setObjects(session.objects())
+      setSelected({
+        printer: session.selectedPreset('printer'),
+        filament: session.selectedPreset('filament'),
+        process: session.selectedPreset('process'),
+      })
+    } catch {
+      /* mutex was actually held; caller will refresh again when work completes */
+    }
   }, [session])
 
   useEffect(() => {
@@ -146,159 +160,261 @@ export default function HomeScreen(): React.JSX.Element {
 
   if (!ready || session === null) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-        <Text style={styles.muted}>Loading profiles</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, backgroundColor: colors.bg }}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={{ ...typography.body, color: colors.textMuted }}>Loading profiles</Text>
       </View>
     )
   }
 
   const vendors = installedVendors()
+  const canSlice = objects.length > 0 && vendors.length > 0
+  const stepValid = (l: number) => (l < 0 && stats !== null ? stats.layerCount : l)
+  const layerLabel = stats === null ? '' : maxLayer < 0 ? `All ${stats.layerCount} layers` : `Layer ${maxLayer} / ${stats.layerCount}`
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.muted}>Core {version}</Text>
-
+    <ScrollView
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl * 2 }}
+      contentInsetAdjustmentBehavior="automatic"
+      style={{ backgroundColor: colors.bg }}
+    >
       {vendors.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.title}>No printer profiles yet</Text>
-          <Text>Install at least one vendor's profiles to pick a printer.</Text>
+        <Card>
+          <Text style={{ ...typography.bodyStrong, color: colors.text }}>No printer profiles yet</Text>
+          <Text style={{ ...typography.body, color: colors.textMuted }}>
+            Install at least one vendor bundle to start slicing.
+          </Text>
           <Link href="/vendors" asChild>
-            <Button title="Install profiles" />
+            <Button title="Install profiles" fullWidth />
           </Link>
-        </View>
+        </Card>
       ) : null}
-      {presetError !== '' ? <Text style={styles.error}>{presetError}</Text> : null}
 
-      <View style={styles.viewportCard}>
-        <OrcaViewport
-          style={styles.viewport}
-          sessionId={session.id}
-          mode={viewMode}
-          maxLayer={maxLayer}
-          showTravels={false}
-          revision={revision}
-        />
-        <View style={styles.row}>
-          <Button title="Objects" onPress={() => setViewMode('scene')} disabled={viewMode === 'scene'} />
-          <Button title="Preview" onPress={() => setViewMode('preview')} disabled={viewMode === 'preview' || stats === null} />
-          {viewMode === 'preview' && stats !== null ? (
-            <View style={styles.row}>
-              <Button title="−" onPress={() => setMaxLayer((l) => Math.max(0, (l < 0 ? stats.layerCount : l) - 1))} />
-              <Text style={styles.muted}>{maxLayer < 0 ? `all ${stats.layerCount}` : `layer ${maxLayer}`}</Text>
-              <Button title="+" onPress={() => setMaxLayer((l) => (l < 0 || l + 1 >= stats.layerCount ? -1 : l + 1))} />
-            </View>
-          ) : null}
+      {presetError !== '' ? (
+        <Card>
+          <Text style={{ ...typography.body, color: colors.danger }}>{presetError}</Text>
+        </Card>
+      ) : null}
+
+      <View style={{ gap: spacing.sm }}>
+        <View
+          style={{
+            height: 320,
+            borderRadius: radius.lg,
+            overflow: 'hidden',
+            backgroundColor: colors.surface,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.separator,
+          }}
+        >
+          <OrcaViewport
+            style={StyleSheet.absoluteFillObject}
+            sessionId={session.id}
+            mode={viewMode}
+            maxLayer={maxLayer}
+            showTravels={false}
+            revision={revision}
+          />
         </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Presets</Text>
-        {PRESET_KINDS.map(({ kind, label }) => (
-          <View key={kind} style={styles.row}>
-            <View style={styles.grow}>
-              <Link href={{ pathname: '/presets/[kind]', params: { kind } }} asChild>
-                <Button title={`${label}: ${selected[kind] || 'none'}`} disabled={busy} />
-              </Link>
-            </View>
-            <Link href={{ pathname: '/settings/[kind]', params: { kind } }} asChild>
-              <Button title="Edit" disabled={busy} />
-            </Link>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Objects</Text>
-        {objects.length === 0 ? <Text style={styles.muted}>Nothing on the plate</Text> : null}
-        {objects.map((o) => (
-          <View key={o.id} style={styles.row}>
-            <Text style={styles.grow}>{o.name}</Text>
-            <Text style={styles.muted}>
-              {o.size.x.toFixed(1)} × {o.size.y.toFixed(1)} × {o.size.z.toFixed(1)} mm
+        <SegmentedControl
+          value={viewMode}
+          options={[
+            { value: 'scene', label: 'Objects' },
+            { value: 'preview', label: 'Preview', disabled: stats === null },
+          ]}
+          onChange={setViewMode}
+        />
+        {viewMode === 'preview' && stats !== null ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.sm,
+              paddingTop: spacing.xs,
+            }}
+          >
+            <Button
+              title="−"
+              variant="secondary"
+              onPress={() => setMaxLayer((l) => Math.max(0, stepValid(l) - 1))}
+              disabled={stepValid(maxLayer) <= 0}
+            />
+            <Text style={{ ...typography.body, color: colors.textMuted, flex: 1, textAlign: 'center' }}>
+              {layerLabel}
             </Text>
             <Button
-              title="Remove"
-              disabled={busy}
+              title="+"
+              variant="secondary"
+              onPress={() => setMaxLayer((l) => (l < 0 || l + 1 >= stats.layerCount ? -1 : l + 1))}
+              disabled={maxLayer < 0}
+            />
+          </View>
+        ) : null}
+      </View>
+
+      <Card title="Presets">
+        {PRESET_KINDS.map(({ kind, label }) => (
+          <PresetRow
+            key={kind}
+            label={label}
+            value={selected[kind]}
+            disabled={busy}
+            pickHref={{ pathname: '/presets/[kind]', params: { kind } }}
+            editHref={{ pathname: '/settings/[kind]', params: { kind } }}
+          />
+        ))}
+      </Card>
+
+      <Card title="Objects">
+        {objects.length === 0 ? (
+          <Text style={{ ...typography.body, color: colors.textSubdued }}>Nothing on the plate yet.</Text>
+        ) : (
+          objects.map((o) => (
+            <View
+              key={o.id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingVertical: spacing.xs,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: colors.separator,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...typography.body, color: colors.text }} numberOfLines={1}>
+                  {o.name}
+                </Text>
+                <Text style={{ ...typography.caption, color: colors.textSubdued }}>
+                  {o.size.x.toFixed(1)} × {o.size.y.toFixed(1)} × {o.size.z.toFixed(1)} mm
+                </Text>
+              </View>
+              <Button
+                title="Remove"
+                variant="ghost"
+                onPress={() => {
+                  session.removeObject(o.id)
+                  refresh()
+                }}
+                disabled={busy}
+              />
+            </View>
+          ))
+        )}
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
+          <View style={{ flex: 1 }}>
+            <Button title="Import model" variant="secondary" onPress={importModel} disabled={busy} fullWidth />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              title="Arrange"
+              variant="secondary"
+              disabled={busy || objects.length === 0}
+              fullWidth
               onPress={() => {
-                session.removeObject(o.id)
-                refresh()
+                setBusy(true)
+                session
+                  .arrange()
+                  .then(refresh)
+                  .catch((error: unknown) => Alert.alert('Arrange failed', String(error)))
+                  .finally(() => setBusy(false))
               }}
             />
           </View>
-        ))}
-        <Button title="Import model" onPress={importModel} disabled={busy} />
-        <Button
-          title="Arrange"
-          disabled={busy || objects.length === 0}
-          onPress={() => {
-            setBusy(true)
-            session
-              .arrange()
-              .then(refresh)
-              .catch((error: unknown) => Alert.alert('Arrange failed', String(error)))
-              .finally(() => setBusy(false))
-          }}
-        />
-      </View>
+        </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Slice</Text>
+      <Card title="Slice">
         {progress !== null ? (
-          <View style={styles.row}>
-            <ActivityIndicator />
-            <Text style={styles.grow}>
-              {progress.percent}% {t(progress.message)}
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ ...typography.body, color: colors.text }}>
+              {progress.percent}% · {t(progress.message)}
             </Text>
-            <Button title="Cancel" onPress={() => session.cancel()} />
+            <ProgressBar percent={progress.percent} />
+            <Button title="Cancel" variant="ghost" onPress={() => session.cancel()} />
           </View>
         ) : (
-          <Button title="Slice plate" onPress={slice} disabled={busy || objects.length === 0} />
+          <Button title="Slice plate" onPress={slice} disabled={!canSlice} fullWidth />
         )}
         {result !== null && result.outcome !== 'finished' ? (
-          <Text style={styles.error}>{result.outcome === 'cancelled' ? 'Cancelled' : result.error}</Text>
+          <Text style={{ ...typography.body, color: colors.danger }}>
+            {result.outcome === 'cancelled' ? 'Cancelled' : result.error}
+          </Text>
         ) : null}
         {result?.warnings.map((w, i) => (
-          <Text key={i} style={w.critical ? styles.error : styles.muted}>
+          <Text
+            key={i}
+            style={{ ...typography.caption, color: w.critical ? colors.danger : colors.textSubdued }}
+          >
             {w.text}
           </Text>
         ))}
         {stats !== null ? (
-          <View>
-            <Text>Print time {formatDuration(stats.printTimeSeconds)}</Text>
-            <Text>
-              Filament {stats.filamentGrams.toFixed(1)} g, {stats.layerCount} layers
-            </Text>
-            <Button title="Share G-code" onPress={share} disabled={gcodePath === null} />
-            <Button title="Upload to printer" onPress={() => send(false)} disabled={gcodePath === null || sending} />
-            <Button title="Upload and print" onPress={() => send(true)} disabled={gcodePath === null || sending} />
+          <View style={{ gap: spacing.sm, paddingTop: spacing.xs }}>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <Stat label="Print time" value={formatDuration(stats.printTimeSeconds)} />
+              <Stat label="Filament" value={`${stats.filamentGrams.toFixed(1)} g`} />
+              <Stat label="Layers" value={String(stats.layerCount)} />
+            </View>
+            <Button
+              title="Share G-code"
+              variant="secondary"
+              onPress={share}
+              disabled={gcodePath === null}
+              fullWidth
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Upload"
+                  variant="secondary"
+                  onPress={() => send(false)}
+                  disabled={gcodePath === null || sending}
+                  fullWidth
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Upload & print"
+                  onPress={() => send(true)}
+                  disabled={gcodePath === null || sending}
+                  fullWidth
+                />
+              </View>
+            </View>
           </View>
         ) : null}
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Printers</Text>
-        <Text style={styles.muted}>{printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(', ')}</Text>
-        <Link href="/printers" asChild>
-          <Button title="Manage printers" />
-        </Link>
-        <Link href="/vendors" asChild>
-          <Button title="Printer profiles" />
-        </Link>
-      </View>
+      <Card title="Printers">
+        <Text style={{ ...typography.body, color: colors.textMuted }}>
+          {printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(', ')}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Link href="/printers" asChild>
+              <Button title="Manage printers" variant="secondary" fullWidth />
+            </Link>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Link href="/vendors" asChild>
+              <Button title="Printer profiles" variant="secondary" fullWidth />
+            </Link>
+          </View>
+        </View>
+      </Card>
+
+      <Text style={{ ...typography.caption, color: colors.textSubdued, textAlign: 'center' }}>Core {version}</Text>
     </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { padding: 16, gap: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  card: { gap: 8, padding: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: '#999' },
-  viewportCard: { gap: 8 },
-  viewport: { height: 320, borderRadius: 8, overflow: 'hidden', backgroundColor: '#eceff1' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  grow: { flex: 1 },
-  title: { fontWeight: '600', fontSize: 16 },
-  muted: { color: '#666' },
-  error: { color: '#b00020' },
-})
+function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
+  const { colors } = useTheme()
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={{ ...typography.caption, color: colors.textSubdued }}>{label}</Text>
+      <Text style={{ ...typography.bodyStrong, color: colors.text }}>{value}</Text>
+    </View>
+  )
+}

@@ -41,7 +41,28 @@ async function download(entry: GitHubEntry, into: Directory): Promise<void> {
   if (target.exists) {
     target.delete()
   }
-  await File.downloadFileAsync(entry.download_url, into)
+  // Fetch through the JS runtime so we see the HTTP status and can validate
+  // the body. GitHub's raw hosting occasionally serves an empty 200 under
+  // rate limiting, and the core then fails to parse the JSON on startup.
+  const response = await fetch(entry.download_url)
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} downloading ${entry.path}`)
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  if (bytes.length === 0) {
+    throw new Error(`Empty response for ${entry.path}`)
+  }
+  if (entry.name.toLowerCase().endsWith('.json')) {
+    // Fail fast on corrupt JSON rather than let the native slicer refuse to
+    // start with a parse_error later.
+    const text = new TextDecoder().decode(bytes)
+    try {
+      JSON.parse(text)
+    } catch (e) {
+      throw new Error(`Malformed JSON for ${entry.path}: ${String(e)}`)
+    }
+  }
+  target.write(bytes)
 }
 
 /** The core's resources directory. Profiles live under resources/profiles. */

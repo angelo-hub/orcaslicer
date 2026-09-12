@@ -83,6 +83,14 @@ struct Session::Impl
     BoundingBoxf bed_bbox() const
     {
         BoundingBoxf bb;
+        // Same guard as Session::bed(): full_config() dereferences null when
+        // no printer preset has been picked yet. A 200×200 mm default lets
+        // the model be imported and centered before the user picks a printer.
+        if (bundle.printers.get_edited_preset().is_default) {
+            bb.merge(Vec2d(0.0, 0.0));
+            bb.merge(Vec2d(200.0, 200.0));
+            return bb;
+        }
         for (const Point& p : get_bed_shape(bundle.full_config()))
             bb.merge(Vec2d(unscaled<double>(p.x()), unscaled<double>(p.y())));
         return bb;
