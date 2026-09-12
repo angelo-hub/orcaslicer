@@ -4,6 +4,11 @@ name: Mobile app checks
 # TypeScript typecheck of the Nitro module and the Expo app, the app's unit tests, and the
 # translation catalog build. Needs no Apple toolchain, so it runs on every push.
 
+# One run per branch: a new push cancels the one still running for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ['**']
