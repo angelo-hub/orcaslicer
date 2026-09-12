@@ -1,57 +1,68 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import React, { useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Text, TextInput, View } from 'react-native'
 
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/Button'
 import { useCore } from '@/lib/core'
 import { availableVendors, installVendor, installedVendors, removeVendor } from '@/lib/profiles'
+import { queryKeys } from '@/lib/queries'
 
 // Installs vendor profile folders from the OrcaSlicer repository into the
-// core's resources directory, then reloads the presets.
+// core's resources directory, then reloads the presets. TanStack Query owns
+// the GitHub listing cache and the retry policy, and mutations invalidate the
+// installed-vendor list so the UI reflects the new state on the next paint.
 export default function VendorsScreen(): React.JSX.Element {
   const { reloadPresets } = useCore()
-  const [available, setAvailable] = useState<string[] | null>(null)
-  const [installed, setInstalled] = useState<string[]>(installedVendors())
+  const client = useQueryClient()
   const [query, setQuery] = useState('')
-  const [working, setWorking] = useState<{ vendor: string; done: number; total: number } | null>(null)
-  const [error, setError] = useState('')
+  const [progress, setProgress] = useState<{ vendor: string; done: number; total: number } | null>(null)
 
-  useEffect(() => {
-    availableVendors()
-      .then(setAvailable)
-      .catch((e: unknown) => setError(String(e)))
-  }, [])
+  const available = useQuery({
+    queryKey: queryKeys.availableVendors,
+    queryFn: () => availableVendors(),
+  })
+  const installed = useQuery({
+    queryKey: queryKeys.installedVendors,
+    queryFn: () => installedVendors(),
+    // The list on disk cannot change without our own mutations, so this
+    // query stays fresh forever and refetches only on explicit invalidate.
+    staleTime: Infinity,
+  })
 
-  const install = useCallback(
-    async (vendor: string) => {
-      setWorking({ vendor, done: 0, total: 0 })
-      try {
-        removeVendor(vendor)
-        await installVendor(vendor, (done, total) => setWorking({ vendor, done, total }))
-        setInstalled(installedVendors())
-        await reloadPresets()
-      } catch (e) {
-        Alert.alert(`Could not install ${vendor}`, String(e))
-        removeVendor(vendor)
-        setInstalled(installedVendors())
-      } finally {
-        setWorking(null)
-      }
-    },
-    [reloadPresets],
-  )
-
-  const remove = useCallback(
-    async (vendor: string) => {
+  const install = useMutation({
+    mutationFn: async (vendor: string) => {
+      setProgress({ vendor, done: 0, total: 0 })
+      // Wipe any partial install first so a re-install (say, after a bad
+      // download landed an empty file) starts from a clean slate.
       removeVendor(vendor)
-      setInstalled(installedVendors())
+      await installVendor(vendor, (done, total) => setProgress({ vendor, done, total }))
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: queryKeys.installedVendors })
       await reloadPresets()
     },
-    [reloadPresets],
-  )
+    onError: (error, vendor) => {
+      Alert.alert(`Could not install ${vendor}`, String(error))
+      removeVendor(vendor)
+      void client.invalidateQueries({ queryKey: queryKeys.installedVendors })
+    },
+    onSettled: () => setProgress(null),
+  })
 
+  const remove = useMutation({
+    mutationFn: (vendor: string) => Promise.resolve(removeVendor(vendor)),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: queryKeys.installedVendors })
+      await reloadPresets()
+    },
+  })
+
+  const busy = install.isPending || remove.isPending
+  const installedList = installed.data ?? []
+  const availableList = available.data ?? installedList
   const needle = query.trim().toLowerCase()
-  const vendors = (available ?? installed).filter((v) => needle === '' || v.toLowerCase().includes(needle))
+  const vendors = availableList.filter((v) => needle === '' || v.toLowerCase().includes(needle))
 
   return (
     <View className="flex-1 bg-gray-100 dark:bg-black">
@@ -65,8 +76,10 @@ export default function VendorsScreen(): React.JSX.Element {
           autoCorrect={false}
           autoCapitalize="none"
         />
-        {error !== '' ? <Text className="text-base text-red-500">{error}</Text> : null}
-        {available === null && error === '' ? <ActivityIndicator color="#0a84ff" /> : null}
+        {available.isError ? (
+          <Text className="text-base text-red-500">{String(available.error)}</Text>
+        ) : null}
+        {available.isPending ? <ActivityIndicator color="#0a84ff" /> : null}
       </View>
       <FlatList
         data={vendors}
@@ -74,8 +87,8 @@ export default function VendorsScreen(): React.JSX.Element {
         contentContainerClassName="px-3 pb-8"
         ItemSeparatorComponent={() => <View className="h-px bg-gray-200 dark:bg-neutral-800" />}
         renderItem={({ item }) => {
-          const isInstalled = installed.includes(item)
-          const isWorking = working?.vendor === item
+          const isInstalled = installedList.includes(item)
+          const isWorking = progress?.vendor === item
           return (
             <View className="flex-row items-center gap-3 bg-white px-2 py-3 dark:bg-neutral-900">
               <Avatar text={item} size={40} />
@@ -89,15 +102,15 @@ export default function VendorsScreen(): React.JSX.Element {
               </View>
               {isWorking ? (
                 <Text className="text-[13px] text-gray-600 dark:text-gray-300">
-                  {working.total > 0 ? `${working.done} / ${working.total}` : 'Listing…'}
+                  {progress.total > 0 ? `${progress.done} / ${progress.total}` : 'Listing…'}
                 </Text>
               ) : isInstalled ? (
                 <View className="flex-row gap-1">
-                  <Button title="Reinstall" variant="secondary" onPress={() => install(item)} disabled={working !== null} />
-                  <Button title="Remove" variant="ghost" onPress={() => remove(item)} disabled={working !== null} />
+                  <Button title="Reinstall" variant="secondary" onPress={() => install.mutate(item)} disabled={busy} />
+                  <Button title="Remove" variant="ghost" onPress={() => remove.mutate(item)} disabled={busy} />
                 </View>
               ) : (
-                <Button title="Install" onPress={() => install(item)} disabled={working !== null} />
+                <Button title="Install" onPress={() => install.mutate(item)} disabled={busy} />
               )}
             </View>
           )
