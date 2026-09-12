@@ -7,10 +7,11 @@
 
 #import <Foundation/Foundation.h>
 #import <NitroModules/HybridObjectRegistry.hpp>
-
+#import "NitroOrcaCore-Swift-Cxx-Umbrella.hpp"
 #import <type_traits>
 
 #include "HybridOrcaCore.hpp"
+#include "HybridOrcaViewportSpecSwift.hpp"
 
 @interface NitroOrcaCoreAutolinking : NSObject
 @end
@@ -28,6 +29,13 @@
                     "The HybridObject \"HybridOrcaCore\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridOrcaCore>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "OrcaViewport",
+    []() -> std::shared_ptr<HybridObject> {
+      std::shared_ptr<HybridOrcaViewportSpec> hybridObject = NitroOrcaCore::NitroOrcaCoreAutolinking::createOrcaViewport();
+      return hybridObject;
     }
   );
 }

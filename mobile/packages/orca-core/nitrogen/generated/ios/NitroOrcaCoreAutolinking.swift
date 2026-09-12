@@ -12,5 +12,15 @@ import NitroModules
 public final class NitroOrcaCoreAutolinking {
   public typealias bridge = margelo.nitro.orca.bridge.swift
 
+  public static func createOrcaViewport() -> bridge.std__shared_ptr_HybridOrcaViewportSpec_ {
+    let hybridObject = HybridOrcaViewport()
+    return { () -> bridge.std__shared_ptr_HybridOrcaViewportSpec_ in
+      let __cxxWrapped = hybridObject.getCxxWrapper()
+      return __cxxWrapped.getCxxPart()
+    }()
+  }
   
+  public static func isOrcaViewportRecyclable() -> Bool {
+    return HybridOrcaViewport.self is any RecyclableView.Type
+  }
 }

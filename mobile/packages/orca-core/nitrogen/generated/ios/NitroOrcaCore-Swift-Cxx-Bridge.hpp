@@ -8,13 +8,18 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-
+// Forward declaration of `HybridOrcaViewportSpec` to properly resolve imports.
+namespace margelo::nitro::orca { class HybridOrcaViewportSpec; }
 
 // Forward declarations of Swift defined types
-
+// Forward declaration of `HybridOrcaViewportSpec_cxx` to properly resolve imports.
+namespace NitroOrcaCore { class HybridOrcaViewportSpec_cxx; }
 
 // Include C++ defined types
-
+#include "HybridOrcaViewportSpec.hpp"
+#include <NitroModules/Result.hpp>
+#include <exception>
+#include <memory>
 
 /**
  * Contains specialized versions of C++ templated types so they can be accessed from Swift,
@@ -22,6 +27,25 @@
  */
 namespace margelo::nitro::orca::bridge::swift {
 
+  // pragma MARK: std::shared_ptr<HybridOrcaViewportSpec>
+  /**
+   * Specialized version of `std::shared_ptr<HybridOrcaViewportSpec>`.
+   */
+  using std__shared_ptr_HybridOrcaViewportSpec_ = std::shared_ptr<HybridOrcaViewportSpec>;
+  std::shared_ptr<HybridOrcaViewportSpec> create_std__shared_ptr_HybridOrcaViewportSpec_(void* NON_NULL swiftUnsafePointer) noexcept;
+  void* NON_NULL get_std__shared_ptr_HybridOrcaViewportSpec_(std__shared_ptr_HybridOrcaViewportSpec_ cppType);
   
+  // pragma MARK: std::weak_ptr<HybridOrcaViewportSpec>
+  using std__weak_ptr_HybridOrcaViewportSpec_ = std::weak_ptr<HybridOrcaViewportSpec>;
+  inline std__weak_ptr_HybridOrcaViewportSpec_ weakify_std__shared_ptr_HybridOrcaViewportSpec_(const std::shared_ptr<HybridOrcaViewportSpec>& strong) noexcept { return strong; }
+  
+  // pragma MARK: Result<void>
+  using Result_void_ = Result<void>;
+  inline Result_void_ create_Result_void_() noexcept {
+    return Result<void>::withValue();
+  }
+  inline Result_void_ create_Result_void_(const std::exception_ptr& error) noexcept {
+    return Result<void>::withError(error);
+  }
 
 } // namespace margelo::nitro::orca::bridge::swift

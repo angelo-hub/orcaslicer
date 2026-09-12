@@ -70,6 +70,7 @@ namespace margelo::nitro::orca {
 
     public:
       // Properties
+      virtual double getId() = 0;
       virtual bool getIsSliced() = 0;
       virtual bool getIsBusy() = 0;
 

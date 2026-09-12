@@ -14,6 +14,7 @@ namespace margelo::nitro::orca {
     HybridObject::loadHybridMethods();
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
+      prototype.registerHybridGetter("id", &HybridOrcaSessionSpec::getId);
       prototype.registerHybridGetter("isSliced", &HybridOrcaSessionSpec::getIsSliced);
       prototype.registerHybridGetter("isBusy", &HybridOrcaSessionSpec::getIsBusy);
       prototype.registerHybridMethod("loadPresets", &HybridOrcaSessionSpec::loadPresets);

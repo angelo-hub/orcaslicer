@@ -20,18 +20,22 @@ Pod::Spec.new do |s|
   s.source_files = [
     # Hybrid Objects (C++)
     "cpp/**/*.{hpp,cpp}",
-    # Autolinking/Registration (Objective-C++)
-    "ios/**/*.{h,mm}",
+    # The viewport: Nitro View (Swift) over a Metal renderer (Objective-C++)
+    "ios/**/*.{h,mm,swift}",
   ]
+  # The renderer's Objective-C interface must be visible to the Swift view.
+  s.public_header_files = ["ios/OrcaViewportRenderer.h"]
 
   s.vendored_frameworks = "ios/OrcaCore.xcframework"
   # The core is a static archive of C++ code; the app links libc++ already.
   s.libraries = "c++", "iconv"
-  s.frameworks = "Foundation", "ModelIO"
+  s.frameworks = "Foundation", "ModelIO", "Metal", "MetalKit", "QuartzCore"
 
   s.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
     "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) BOOST_ALL_NO_LIB",
+    "DEFINES_MODULE" => "YES",
+    "SWIFT_OBJC_INTEROP_MODE" => "objcxx",
   }
 
   load 'nitrogen/generated/ios/NitroOrcaCore+autolinking.rb'

@@ -35,6 +35,8 @@ target_sources(
   # Shared Nitrogen C++ sources
   ../nitrogen/generated/shared/c++/HybridOrcaSessionSpec.cpp
   ../nitrogen/generated/shared/c++/HybridOrcaCoreSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridOrcaViewportSpec.cpp
+  ../nitrogen/generated/shared/c++/views/HybridOrcaViewportComponent.cpp
   # Android-specific Nitrogen C++ sources
   
 )

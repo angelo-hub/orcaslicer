@@ -1,6 +1,9 @@
 import { NitroModules } from 'react-native-nitro-modules'
 import type { OrcaCore } from './specs/OrcaCore.nitro'
 
+export { OrcaViewport, type OrcaViewportRef } from './views/OrcaViewport'
+export type { OrcaViewportMethods, OrcaViewportProps, ViewportMode } from './specs/OrcaViewport.nitro'
+
 export type {
   BedInfo,
   ObjectInfo,

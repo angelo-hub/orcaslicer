@@ -1,0 +1,14 @@
+{
+  "uiViewClassName": "OrcaViewport",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "sessionId": true,
+    "mode": true,
+    "maxLayer": true,
+    "showTravels": true,
+    "revision": true,
+    "hybridRef": true
+  }
+}

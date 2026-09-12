@@ -8,10 +8,26 @@
 #include "NitroOrcaCore-Swift-Cxx-Bridge.hpp"
 
 // Include C++ implementation defined types
-
+#include "HybridOrcaViewportSpecSwift.hpp"
+#include "NitroOrcaCore-Swift-Cxx-Umbrella.hpp"
+#include <NitroModules/NitroDefines.hpp>
 
 namespace margelo::nitro::orca::bridge::swift {
 
-  
+  // pragma MARK: std::shared_ptr<HybridOrcaViewportSpec>
+  std::shared_ptr<HybridOrcaViewportSpec> create_std__shared_ptr_HybridOrcaViewportSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
+    NitroOrcaCore::HybridOrcaViewportSpec_cxx swiftPart = NitroOrcaCore::HybridOrcaViewportSpec_cxx::fromUnsafe(swiftUnsafePointer);
+    return std::make_shared<margelo::nitro::orca::HybridOrcaViewportSpecSwift>(swiftPart);
+  }
+  void* NON_NULL get_std__shared_ptr_HybridOrcaViewportSpec_(std__shared_ptr_HybridOrcaViewportSpec_ cppType) {
+    std::shared_ptr<margelo::nitro::orca::HybridOrcaViewportSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::orca::HybridOrcaViewportSpecSwift>(cppType);
+    #ifdef NITRO_DEBUG
+    if (swiftWrapper == nullptr) [[unlikely]] {
+      throw std::runtime_error("Class \"HybridOrcaViewportSpec\" is not implemented in Swift!");
+    }
+    #endif
+    NitroOrcaCore::HybridOrcaViewportSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
+    return swiftPart.toUnsafe();
+  }
 
 } // namespace margelo::nitro::orca::bridge::swift

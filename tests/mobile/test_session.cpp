@@ -64,12 +64,12 @@ const std::string& first_compatible(const std::vector<PresetInfo>& presets)
 
 } // namespace
 
-TEST_CASE("Mobile façade reports the core version", "[mobile]")
+TEST_CASE("Mobile façade reports the core version", "[Session]")
 {
     REQUIRE_FALSE(core_version().empty());
 }
 
-TEST_CASE("Option definitions describe every preset option", "[mobile]")
+TEST_CASE("Option definitions describe every preset option", "[Session]")
 {
     const nlohmann::json defs = nlohmann::json::parse(Session::option_definitions_json());
     REQUIRE(defs.is_array());
@@ -96,7 +96,7 @@ TEST_CASE("Option definitions describe every preset option", "[mobile]")
     CHECK(found_nozzle_diameter);
 }
 
-TEST_CASE("Session loads presets, imports a model, slices and exports G-code", "[mobile][slow]")
+TEST_CASE("Session loads presets, imports a model, slices and exports G-code", "[Session][slow]")
 {
     const ScopedDataDir& dir = configured_directories();
     Session              session;

@@ -1,5 +1,7 @@
 #include "HybridOrcaSession.hpp"
 
+#include "SessionRegistry.hpp"
+
 #include <NitroModules/Promise.hpp>
 
 #include <stdexcept>
@@ -78,6 +80,20 @@ SliceResult toJS(const Slic3r::Mobile::SliceResult& r) {
 }
 
 } // namespace
+
+HybridOrcaSession::HybridOrcaSession() : HybridObject(TAG) {
+  _id = SessionRegistry::add(&_session, &_mutex);
+}
+
+HybridOrcaSession::~HybridOrcaSession() {
+  // Unregister first, then wait for any reader or long operation before the members die.
+  SessionRegistry::remove(_id);
+  std::lock_guard<std::mutex> lock(_mutex);
+}
+
+double HybridOrcaSession::getId() {
+  return static_cast<double>(_id);
+}
 
 std::unique_lock<std::mutex> HybridOrcaSession::lockNow() {
   std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);

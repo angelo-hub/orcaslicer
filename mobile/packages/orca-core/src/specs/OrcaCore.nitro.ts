@@ -87,6 +87,8 @@ export interface SliceStatistics {
  * the session's own thread, one at a time.
  */
 export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
+  /** Identifies this session to native views such as OrcaViewport. */
+  readonly id: number
   /** Loads vendor profiles from the resources directory and user presets from the data directory. Resolves to an error text, empty on success. */
   loadPresets(): Promise<string>
   presets(kind: PresetKind): PresetInfo[]

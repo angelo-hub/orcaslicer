@@ -4,6 +4,7 @@
 
 #include <OrcaCore/Session.hpp>
 
+#include <cstdint>
 #include <mutex>
 
 namespace margelo::nitro::orca {
@@ -16,9 +17,11 @@ namespace margelo::nitro::orca {
 // call rather than a frozen UI thread. cancel() never takes the mutex.
 class HybridOrcaSession final : public HybridOrcaSessionSpec {
 public:
-  HybridOrcaSession() : HybridObject(TAG) {}
+  HybridOrcaSession();
+  ~HybridOrcaSession() override;
 
   // Properties
+  double getId() override;
   bool getIsSliced() override;
   bool getIsBusy() override;
 
@@ -56,6 +59,7 @@ private:
 
   Slic3r::Mobile::Session _session;
   std::mutex _mutex;
+  uint64_t _id = 0;
 };
 
 } // namespace margelo::nitro::orca

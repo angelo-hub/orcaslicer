@@ -8,10 +8,17 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-
+// Forward declaration of `HybridOrcaViewportSpec` to properly resolve imports.
+namespace margelo::nitro::orca { class HybridOrcaViewportSpec; }
+// Forward declaration of `ViewportMode` to properly resolve imports.
+namespace margelo::nitro::orca { enum class ViewportMode; }
 
 // Include C++ defined types
-
+#include "HybridOrcaViewportSpec.hpp"
+#include "ViewportMode.hpp"
+#include <NitroModules/Result.hpp>
+#include <exception>
+#include <memory>
 
 // C++ helpers for Swift
 #include "NitroOrcaCore-Swift-Cxx-Bridge.hpp"
@@ -23,7 +30,8 @@
 #include <NitroModules/DateToChronoDate.hpp>
 
 // Forward declarations of Swift defined types
-
+// Forward declaration of `HybridOrcaViewportSpec_cxx` to properly resolve imports.
+namespace NitroOrcaCore { class HybridOrcaViewportSpec_cxx; }
 
 // Include Swift defined types
 #if __has_include("NitroOrcaCore-Swift.h")

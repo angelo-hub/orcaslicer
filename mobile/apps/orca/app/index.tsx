@@ -4,7 +4,7 @@ import { Link } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import React, { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, View } from 'react-native'
-import type { ObjectInfo, PresetKind, SliceResult, SliceStatistics } from 'react-native-orca-core'
+import { OrcaViewport, type ObjectInfo, type PresetKind, type SliceResult, type SliceStatistics, type ViewportMode } from 'react-native-orca-core'
 
 import { useCore } from '@/lib/core'
 import { t } from '@/lib/i18n'
@@ -34,9 +34,13 @@ export default function HomeScreen(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
   const [printers, setPrinters] = useState<PrinterHost[]>([])
+  const [viewMode, setViewMode] = useState<ViewportMode>('scene')
+  const [maxLayer, setMaxLayer] = useState(-1)
+  const [revision, setRevision] = useState(0)
 
   const refresh = useCallback(() => {
     if (session === null || session.isBusy) return
+    setRevision((r) => r + 1)
     setObjects(session.objects())
     setSelected({
       printer: session.selectedPreset('printer'),
@@ -86,6 +90,9 @@ export default function HomeScreen(): React.JSX.Element {
         const written = await session.exportGCode(nativePath(out.parentDirectory) + '/plate_1.gcode')
         setGcodePath(written)
         setStats(session.statistics())
+        setMaxLayer(-1)
+        setViewMode('preview')
+        setRevision((r) => r + 1)
       }
     } catch (error) {
       Alert.alert('Slicing failed', String(error))
@@ -162,6 +169,28 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
       ) : null}
       {presetError !== '' ? <Text style={styles.error}>{presetError}</Text> : null}
+
+      <View style={styles.viewportCard}>
+        <OrcaViewport
+          style={styles.viewport}
+          sessionId={session.id}
+          mode={viewMode}
+          maxLayer={maxLayer}
+          showTravels={false}
+          revision={revision}
+        />
+        <View style={styles.row}>
+          <Button title="Objects" onPress={() => setViewMode('scene')} disabled={viewMode === 'scene'} />
+          <Button title="Preview" onPress={() => setViewMode('preview')} disabled={viewMode === 'preview' || stats === null} />
+          {viewMode === 'preview' && stats !== null ? (
+            <View style={styles.row}>
+              <Button title="−" onPress={() => setMaxLayer((l) => Math.max(0, (l < 0 ? stats.layerCount : l) - 1))} />
+              <Text style={styles.muted}>{maxLayer < 0 ? `all ${stats.layerCount}` : `layer ${maxLayer}`}</Text>
+              <Button title="+" onPress={() => setMaxLayer((l) => (l < 0 || l + 1 >= stats.layerCount ? -1 : l + 1))} />
+            </View>
+          ) : null}
+        </View>
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.title}>Presets</Text>
@@ -265,6 +294,8 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   card: { gap: 8, padding: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: '#999' },
+  viewportCard: { gap: 8 },
+  viewport: { height: 320, borderRadius: 8, overflow: 'hidden', backgroundColor: '#eceff1' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grow: { flex: 1 },
   title: { fontWeight: '600', fontSize: 16 },
