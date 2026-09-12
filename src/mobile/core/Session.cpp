@@ -194,9 +194,22 @@ bool Session::select_filament(size_t extruder, const std::string& name)
 
 BedInfo Session::bed() const
 {
-    const Impl&              im  = *m_impl;
+    const Impl& im = *m_impl;
+    BedInfo out;
+    // Callers (notably the Metal viewport) may ask for the bed before any
+    // vendor bundle is installed. PresetBundle::full_config() walks the
+    // filament presets against the printer's extruder list and crashes when
+    // that has never been populated. A default 200×200 mm plate keeps the
+    // viewport drawable until a printer preset is picked.
+    if (im.bundle.printers.get_edited_preset().is_default) {
+        out.shape.push_back({ 0.0, 0.0 });
+        out.shape.push_back({ 200.0, 0.0 });
+        out.shape.push_back({ 200.0, 200.0 });
+        out.shape.push_back({ 0.0, 200.0 });
+        out.height = 200.0;
+        return out;
+    }
     const DynamicPrintConfig cfg = im.bundle.full_config();
-    BedInfo                  out;
     for (const Point& p : get_bed_shape(cfg))
         out.shape.push_back({ unscaled<double>(p.x()), unscaled<double>(p.y()) });
     out.height = cfg.opt_float("printable_height");
