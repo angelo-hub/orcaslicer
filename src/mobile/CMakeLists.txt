@@ -13,15 +13,9 @@ add_library(libslic3r_mobile STATIC
     core/Session.hpp
 )
 
-# libslic3r leaves nanosvg's implementation to the program that links it (see
-# core/nanosvg_impl.cpp). Its own archive, listed after libslic3r, so a static link
-# resolves libslic3r's references to it.
-add_library(libslic3r_nanosvg STATIC core/nanosvg_impl.cpp)
-target_link_libraries(libslic3r_nanosvg PRIVATE nanosvg)
-
 target_include_directories(libslic3r_mobile PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(libslic3r_mobile
-    PUBLIC  libslic3r libslic3r_nanosvg
+    PUBLIC  libslic3r
     PRIVATE nlohmann_json
 )
 
