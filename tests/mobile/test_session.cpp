@@ -10,6 +10,7 @@
 
 #include <boost/filesystem.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 
@@ -175,6 +176,28 @@ TEST_CASE("Session loads presets, imports a model, slices and exports G-code", "
         CHECK(stats.print_time_s > 0);
         CHECK(stats.filament_mm3 > 0);
         CHECK(stats.layer_count > 10);
+
+        // Renderer input: the scaled cube as world-space triangles, and the toolpath.
+        const MeshData mesh = session.mesh(id);
+        REQUIRE(mesh.triangles == 12);
+        REQUIRE(mesh.positions.size() == 12 * 9);
+        REQUIRE(mesh.normals.size() == mesh.positions.size());
+        float min_x = mesh.positions[0], max_x = mesh.positions[0];
+        for (size_t i = 0; i < mesh.positions.size(); i += 3) {
+            min_x = std::min(min_x, mesh.positions[i]);
+            max_x = std::max(max_x, mesh.positions[i]);
+        }
+        CHECK_THAT(max_x - min_x, Catch::Matchers::WithinAbs(10.0, 0.01));
+        CHECK(session.mesh(id + 1000000).triangles == 0);
+
+        const PreviewData preview = session.preview();
+        CHECK(preview.vertices.size() > 100);
+        CHECK(preview.layer_zs.size() > 10);
+        CHECK_THAT(preview.print_time_s, Catch::Matchers::WithinAbs(stats.print_time_s, 0.5));
+        bool has_extrusion = false;
+        for (const PreviewVertex& v : preview.vertices)
+            has_extrusion |= v.type == PreviewMoveType::Extrude && v.role == PreviewRole::ExternalPerimeter && v.width > 0;
+        CHECK(has_extrusion);
 
         CHECK(session.remove_object(id));
         CHECK(session.objects().empty());

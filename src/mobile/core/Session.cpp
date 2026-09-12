@@ -11,6 +11,7 @@
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintBase.hpp"
 #include "libslic3r/PrintConfig.hpp"
+#include "libslic3r/TriangleMesh.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -441,6 +442,141 @@ SliceStatistics Session::statistics() const
     }
     for (const PrintObject* po : im.print.objects())
         out.layer_count = std::max<unsigned long>(out.layer_count, static_cast<unsigned long>(po->layer_count()));
+    return out;
+}
+
+MeshData Session::mesh(unsigned long id) const
+{
+    MeshData           out;
+    const ModelObject* obj = m_impl->find_object(id);
+    if (obj == nullptr)
+        return out;
+
+    TriangleMesh mesh = obj->mesh();
+    if (! obj->instances.empty())
+        mesh.transform(obj->instances.front()->get_matrix(), true);
+
+    const indexed_triangle_set& its = mesh.its;
+    out.triangles = static_cast<unsigned long>(its.indices.size());
+    out.positions.reserve(its.indices.size() * 9);
+    out.normals.reserve(its.indices.size() * 9);
+    for (const Vec3i& face : its.indices) {
+        const Vec3f& a = its.vertices[face(0)];
+        const Vec3f& b = its.vertices[face(1)];
+        const Vec3f& c = its.vertices[face(2)];
+        Vec3f        n = (b - a).cross(c - a);
+        const float  len = n.norm();
+        n = len > 0.f ? Vec3f(n / len) : Vec3f(0.f, 0.f, 1.f);
+        for (const Vec3f* v : { &a, &b, &c }) {
+            out.positions.insert(out.positions.end(), { v->x(), v->y(), v->z() });
+            out.normals.insert(out.normals.end(), { n.x(), n.y(), n.z() });
+        }
+    }
+    return out;
+}
+
+static PreviewRole preview_role(ExtrusionRole role)
+{
+    switch (role) {
+    case erPerimeter:                return PreviewRole::Perimeter;
+    case erExternalPerimeter:        return PreviewRole::ExternalPerimeter;
+    case erOverhangPerimeter:        return PreviewRole::OverhangPerimeter;
+    case erInternalInfill:           return PreviewRole::InternalInfill;
+    case erSolidInfill:              return PreviewRole::SolidInfill;
+    case erTopSolidInfill:           return PreviewRole::TopSolidInfill;
+    case erBottomSurface:            return PreviewRole::BottomSurface;
+    case erIroning:                  return PreviewRole::Ironing;
+    case erBridgeInfill:             return PreviewRole::BridgeInfill;
+    case erInternalBridgeInfill:     return PreviewRole::InternalBridgeInfill;
+    case erGapFill:                  return PreviewRole::GapFill;
+    case erSkirt:                    return PreviewRole::Skirt;
+    case erBrim:                     return PreviewRole::Brim;
+    case erSupportMaterial:          return PreviewRole::Support;
+    case erSupportMaterialInterface: return PreviewRole::SupportInterface;
+    case erSupportTransition:        return PreviewRole::SupportTransition;
+    case erWipeTower:                return PreviewRole::WipeTower;
+    case erCustom:                   return PreviewRole::Custom;
+    case erMixed:                    return PreviewRole::Mixed;
+    default:                         return PreviewRole::None;
+    }
+}
+
+static PreviewMoveType preview_move_type(EMoveType type)
+{
+    switch (type) {
+    case EMoveType::Retract:      return PreviewMoveType::Retract;
+    case EMoveType::Unretract:    return PreviewMoveType::Unretract;
+    case EMoveType::Seam:         return PreviewMoveType::Seam;
+    case EMoveType::Tool_change:  return PreviewMoveType::ToolChange;
+    case EMoveType::Color_change: return PreviewMoveType::ColorChange;
+    case EMoveType::Pause_Print:  return PreviewMoveType::PausePrint;
+    case EMoveType::Custom_GCode: return PreviewMoveType::CustomGCode;
+    case EMoveType::Travel:       return PreviewMoveType::Travel;
+    case EMoveType::Wipe:         return PreviewMoveType::Wipe;
+    case EMoveType::Extrude:      return PreviewMoveType::Extrude;
+    default:                      return PreviewMoveType::Noop;
+    }
+}
+
+// "#RRGGBB" or "#RRGGBBAA" to RGBA floats; anything else is opaque grey.
+static std::array<float, 4> parse_color(const std::string& text)
+{
+    std::array<float, 4> rgba = { 0.5f, 0.5f, 0.5f, 1.f };
+    if ((text.size() == 7 || text.size() == 9) && text[0] == '#') {
+        auto hex = [](char c) -> int {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+            return -1;
+        };
+        for (size_t i = 0; i < (text.size() - 1) / 2; ++ i) {
+            const int hi = hex(text[1 + 2 * i]), lo = hex(text[2 + 2 * i]);
+            if (hi < 0 || lo < 0)
+                return { 0.5f, 0.5f, 0.5f, 1.f };
+            rgba[i] = float(hi * 16 + lo) / 255.f;
+        }
+    }
+    return rgba;
+}
+
+PreviewData Session::preview() const
+{
+    const Impl& im = *m_impl;
+    PreviewData out;
+    if (! im.exported)
+        return out;
+
+    const GCodeProcessorResult& result = im.gcode_result;
+    out.print_time_s = result.print_statistics.modes[static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Normal)].time;
+    for (const std::string& color : result.extruder_colors)
+        out.tool_colors.push_back(parse_color(color));
+
+    out.vertices.reserve(result.moves.size());
+    for (const GCodeProcessorResult::MoveVertex& move : result.moves) {
+        PreviewVertex v;
+        v.position[0]     = move.position.x();
+        v.position[1]     = move.position.y();
+        v.position[2]     = move.position.z();
+        v.width           = move.width;
+        v.height          = move.height;
+        v.feedrate        = move.feedrate;
+        v.fan_speed       = move.fan_speed;
+        v.temperature     = move.temperature;
+        v.volumetric_rate = move.volumetric_rate();
+        v.time            = move.time[static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Normal)];
+        v.layer_id        = move.layer_id;
+        v.extruder_id     = move.extruder_id;
+        v.color_id        = move.cp_color_id;
+        v.role            = preview_role(move.extrusion_role);
+        v.type            = preview_move_type(move.type);
+        out.vertices.push_back(v);
+
+        if (move.type == EMoveType::Extrude) {
+            if (out.layer_zs.size() <= move.layer_id)
+                out.layer_zs.resize(move.layer_id + 1, 0.f);
+            out.layer_zs[move.layer_id] = std::max(out.layer_zs[move.layer_id], move.position.z());
+        }
+    }
     return out;
 }
 

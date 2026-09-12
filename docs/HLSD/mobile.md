@@ -28,4 +28,4 @@ Two constraints shape the recipes:
 
 The Expo app (`mobile/apps/orca`) owns everything that is not slicing: file import, sending G-code, and fetching vendor profiles from the repository into the core's resources directory.
 
-The façade owns all access to `Print`, `Model` and the preset bundle. The renderer, when present under `src/mobile/render/`, exposes only its own vertex, camera and colour types and never includes `libslic3r`; the façade fills its buffers. Geometry therefore never crosses the JavaScript boundary: the app holds handles and sends commands.
+The façade owns all access to `Print`, `Model` and the preset bundle. The renderer, when present under `src/mobile/render/`, exposes only its own vertex, camera and colour types and never includes `libslic3r`; the façade fills its buffers through `Session::mesh()` (an object's triangles in world space with per-face normals) and `Session::preview()` (the exported toolpath as one vertex per G-code move with libvgcode's segment convention, plus layer heights and tool colours). Geometry therefore never crosses the JavaScript boundary: the app holds handles and sends commands.

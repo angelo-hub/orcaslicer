@@ -86,6 +86,53 @@ struct SliceStatistics
     unsigned long layer_count       = 0;
 };
 
+// Geometry for the renderer. These are the only types the renderer sees; it never
+// includes libslic3r.
+
+// Flat, non-indexed triangles in world space: nine floats per triangle in `positions`
+// and the same layout of per-face normals in `normals`.
+struct MeshData
+{
+    std::vector<float> positions;
+    std::vector<float> normals;
+    unsigned long      triangles = 0;
+};
+
+enum class PreviewMoveType : unsigned char { Noop, Retract, Unretract, Seam, ToolChange, ColorChange, PausePrint, CustomGCode, Travel, Wipe, Extrude };
+
+enum class PreviewRole : unsigned char {
+    None, Perimeter, ExternalPerimeter, OverhangPerimeter, InternalInfill, SolidInfill, TopSolidInfill, BottomSurface,
+    Ironing, BridgeInfill, InternalBridgeInfill, GapFill, Skirt, Brim, Support, SupportInterface, SupportTransition,
+    WipeTower, Custom, Mixed
+};
+
+// One G-code move. Consecutive vertices form the toolpath; the segment ending at vertex i
+// is drawn with vertex i's attributes, as libvgcode does.
+struct PreviewVertex
+{
+    float           position[3] = { 0, 0, 0 }; // mm
+    float           width       = 0;           // mm
+    float           height      = 0;           // mm
+    float           feedrate    = 0;           // mm/s
+    float           fan_speed   = 0;           // percent
+    float           temperature = 0;           // celsius
+    float           volumetric_rate = 0;       // mm3/s
+    float           time        = 0;           // s from print start, normal mode
+    unsigned int    layer_id    = 0;
+    unsigned char   extruder_id = 0;
+    unsigned char   color_id    = 0;           // color-change index
+    PreviewRole     role        = PreviewRole::None;
+    PreviewMoveType type        = PreviewMoveType::Noop;
+};
+
+struct PreviewData
+{
+    std::vector<PreviewVertex>         vertices;
+    std::vector<float>                 layer_zs;    // top z of each layer, by layer id
+    std::vector<std::array<float, 4>>  tool_colors; // RGBA per extruder, from the filament colours
+    float                              print_time_s = 0;
+};
+
 class Session
 {
 public:
@@ -134,6 +181,11 @@ public:
     // Export the processed print. Returns the path written; throws std::runtime_error.
     std::string              export_gcode(const std::string& path);
     SliceStatistics          statistics() const;
+
+    // Renderer input. mesh() is the object's triangles in world space (empty for an unknown
+    // id); preview() is the toolpath of the last exported G-code (empty before export).
+    MeshData                 mesh(unsigned long id) const;
+    PreviewData              preview() const;
 
 private:
     struct Impl;
