@@ -1,67 +1,49 @@
-import { Link } from 'expo-router'
+import { useRouter } from 'expo-router'
 import React from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 
-import { spacing, typography, useTheme } from '@/lib/theme'
+type Href = Parameters<ReturnType<typeof useRouter>['push']>[0]
 
 type Props = {
   label: string
   value: string
   disabled?: boolean
-  pickHref: React.ComponentProps<typeof Link>['href']
-  editHref: React.ComponentProps<typeof Link>['href']
+  onPickPress: () => void
+  editHref: Href
 }
 
-// A settings-app-style row: title on the left, current value in the muted
-// column on the right, chevron pointing at the picker screen. A separate
-// "Edit" affordance drops into the full parameter editor for that preset
-// kind. The whole label + value area is one press target.
-export function PresetRow({ label, value, disabled = false, pickHref, editHref }: Props): React.JSX.Element {
-  const { colors } = useTheme()
+// A settings-app-style row: label on the left, current value on the right, a
+// chevron pointing at the picker sheet, and a separate "Edit" affordance
+// that dives into the full parameter editor.
+export function PresetRow({ label, value, disabled = false, onPickPress, editHref }: Props): React.JSX.Element {
+  const router = useRouter()
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.sm,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: colors.separator,
-      }}
-    >
-      <Link href={pickHref} asChild>
-        <Pressable
-          disabled={disabled}
-          style={({ pressed }) => ({
-            flex: 1,
-            opacity: disabled ? 0.5 : pressed ? 0.6 : 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.sm,
-          })}
+    <View className="flex-row items-center gap-2 border-b border-gray-200 py-2 dark:border-neutral-800">
+      <Pressable
+        onPress={disabled ? undefined : onPickPress}
+        className={`flex-1 flex-row items-center gap-2 ${disabled ? 'opacity-50' : 'active:opacity-60'}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value.length > 0 ? value : 'not chosen'}`}
+      >
+        <Text className="text-base text-black dark:text-white">{label}</Text>
+        <Text
+          numberOfLines={1}
+          className="flex-1 text-right text-base text-gray-500 dark:text-gray-400"
         >
-          <Text style={{ ...typography.body, color: colors.text, flexShrink: 0 }}>{label}</Text>
-          <Text
-            style={{ ...typography.body, color: colors.textSubdued, flex: 1, textAlign: 'right' }}
-            numberOfLines={1}
-          >
-            {value.length > 0 ? value : 'Choose'}
-          </Text>
-          <Text style={{ color: colors.textSubdued, fontSize: 20, lineHeight: 20 }}>›</Text>
-        </Pressable>
-      </Link>
-      <Link href={editHref} asChild>
-        <Pressable
-          disabled={disabled}
-          style={({ pressed }) => ({
-            marginLeft: spacing.md,
-            paddingVertical: spacing.xs,
-            paddingHorizontal: spacing.sm,
-            opacity: disabled ? 0.5 : pressed ? 0.6 : 1,
-          })}
-        >
-          <Text style={{ ...typography.body, color: colors.accent }}>Edit</Text>
-        </Pressable>
-      </Link>
+          {value.length > 0 ? value : 'Choose'}
+        </Text>
+        <Text className="ml-0.5 text-2xl leading-6 text-gray-400">›</Text>
+      </Pressable>
+      <View className="h-full w-px bg-gray-200 dark:bg-neutral-800" />
+      <Pressable
+        hitSlop={8}
+        onPress={disabled ? undefined : () => router.push(editHref)}
+        className={disabled ? 'opacity-50' : 'active:opacity-60'}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${label} preset`}
+      >
+        <Text className="px-1 text-base text-blue-500">Edit</Text>
+      </Pressable>
     </View>
   )
 }

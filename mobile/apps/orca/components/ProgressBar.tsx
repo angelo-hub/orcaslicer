@@ -1,17 +1,14 @@
 import React from 'react'
 import { View } from 'react-native'
 
-import { radius, useTheme } from '@/lib/theme'
-
 type Props = { percent: number }
 
-// A slim progress track. Percent is clamped so the caller does not have to.
+// Slim progress track; percent is clamped so callers do not have to.
 export function ProgressBar({ percent }: Props): React.JSX.Element {
-  const { colors } = useTheme()
   const p = Math.max(0, Math.min(100, percent))
   return (
-    <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.ghost, overflow: 'hidden' }}>
-      <View style={{ height: '100%', width: `${p}%`, backgroundColor: colors.accent, borderRadius: radius.sm }} />
+    <View className="h-1 overflow-hidden rounded bg-gray-200 dark:bg-neutral-800">
+      <View className="h-full rounded bg-blue-500" style={{ width: `${p}%` }} />
     </View>
   )
 }

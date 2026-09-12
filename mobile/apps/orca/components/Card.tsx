@@ -1,43 +1,23 @@
 import React from 'react'
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
-
-import { radius, spacing, typography, useTheme } from '@/lib/theme'
+import { Text, View } from 'react-native'
 
 type Props = {
   title?: string
   children: React.ReactNode
-  style?: ViewStyle
+  className?: string
 }
 
-// Card: the primary surface. On iOS the visual is a rounded rectangle over the
-// grouped-background fill; the border is a hairline in the separator color so
-// the card stays legible in both schemes.
-export function Card({ title, children, style }: Props): React.JSX.Element {
-  const { colors } = useTheme()
+// Card: a rounded surface with a hairline border. The optional title renders
+// above the card in the muted section-header style iOS uses.
+export function Card({ title, children, className }: Props): React.JSX.Element {
   return (
-    <View style={style}>
+    <View className={className}>
       {title !== undefined && title !== '' ? (
-        <Text
-          style={{
-            ...typography.section,
-            color: colors.textSubdued,
-            marginBottom: spacing.sm,
-            paddingHorizontal: spacing.xs,
-          }}
-        >
+        <Text className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           {title}
         </Text>
       ) : null}
-      <View
-        style={{
-          backgroundColor: colors.surface,
-          borderRadius: radius.md,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.separator,
-          padding: spacing.md,
-          gap: spacing.sm,
-        }}
-      >
+      <View className="gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
         {children}
       </View>
     </View>
