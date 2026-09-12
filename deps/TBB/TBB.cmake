@@ -6,13 +6,6 @@ else()
     set(_patch_command "")
 endif()
 
-# TBB_STRICT turns every warning into an error; the iOS SDK is not what the
-# recipe was tuned against.
-set(_tbb_strict "")
-if (DEPS_IOS)
-    set(_tbb_strict "-DTBB_STRICT=OFF")
-endif ()
-
 orcaslicer_add_cmake_project(
     TBB
     URL "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.5.0.zip"
@@ -26,7 +19,6 @@ orcaslicer_add_cmake_project(
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         -DCMAKE_DEBUG_POSTFIX=_debug
-        ${_tbb_strict}
 )
 
 if (MSVC)
