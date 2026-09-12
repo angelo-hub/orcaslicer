@@ -24,7 +24,7 @@
     "android": {
       "package": "com.orcaslicer.mobile"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "./plugins/with-swiftui-core-weak-link"],
     "experiments": {
       "typedRoutes": true
     }

@@ -2,6 +2,9 @@ node_modules/
 # Build output of the Nitro package (tsc); the app's lib/ is source.
 packages/*/lib/
 .expo/
+# expo prebuild regenerates the native projects on each run; treat them as build output.
+apps/*/ios/
+apps/*/android/
 ios/build/
 android/build/
 *.tsbuildinfo

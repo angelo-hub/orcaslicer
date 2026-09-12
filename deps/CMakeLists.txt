@@ -344,7 +344,10 @@ if(FLATPAK)
 endif()
 
 set(ZLIB_PKG "")
-if (NOT ZLIB_FOUND)
+if (NOT ZLIB_FOUND OR DEPS_MOBILE)
+    # The iOS SDK ships zlib as a .tbd stub, which find_package accepts, but
+    # nothing in that stub survives libtool -static when the xcframework is
+    # merged. A static build is what makes the archive self-contained.
     include(ZLIB/ZLIB.cmake)
     set(ZLIB_PKG dep_ZLIB)
 endif ()
@@ -355,7 +358,9 @@ if (NOT PNG_FOUND)
 endif ()
 set(EXPAT_PKG "")
 find_package(EXPAT)
-if (NOT EXPAT_FOUND)
+if (NOT EXPAT_FOUND OR DEPS_MOBILE)
+    # Same reason as ZLIB above: the SDK exposes libexpat as a stub, so a
+    # mobile build must ship its own static copy.
     include(EXPAT/EXPAT.cmake)
     set(EXPAT_PKG dep_EXPAT)
 endif ()
