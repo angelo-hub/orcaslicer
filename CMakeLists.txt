@@ -121,7 +121,11 @@ option(ORCA_BUILD_PYTHON_STUBGEN_MODULE "Build importable Python module for pybi
 option(ORCA_MOBILE "Build only the slicing core and the mobile façade" OFF)
 if (ORCA_MOBILE)
     set(SLIC3R_GUI 0 CACHE BOOL "" FORCE)
-    set(SLIC3R_STATIC 1 CACHE BOOL "" FORCE)
+    # A mobile OS only takes static libraries. A desktop host building the core for
+    # its tests keeps the choice, so it can use the system's shared libraries.
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
+        set(SLIC3R_STATIC 1 CACHE BOOL "" FORCE)
+    endif ()
     set(ORCA_BUILD_PYTHON_STUBGEN_MODULE OFF CACHE BOOL "" FORCE)
     set(SLIC3R_BUILD_SANDBOXES OFF CACHE BOOL "" FORCE)
     set(ORCA_TOOLS OFF CACHE BOOL "" FORCE)
