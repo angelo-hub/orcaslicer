@@ -43,14 +43,17 @@ module.exports = function withSwiftUICoreWeakLink(config) {
       let contents = fs.readFileSync(podfilePath, 'utf8')
       if (contents.includes(HOOK_MARKER)) return mod
 
-      // Insert right after the react_native_post_install(...) call closes.
-      const anchor = /react_native_post_install\([^)]*\)\s*\n/m
+      // Insert before the outer `post_install do |installer|` block's matching
+      // `end`. Non-greedy match on lines skips over the multi-line
+      // react_native_post_install(...) call while stopping at the first
+      // block-close indented one level in from `post_install`.
+      const anchor = /(post_install do \|installer\|\n(?:[^\n]*\n)*?)(\s*end\s*\n)/
       if (!anchor.test(contents)) {
         throw new Error(
-          'with-swiftui-core-weak-link: could not find react_native_post_install in Podfile',
+          'with-swiftui-core-weak-link: could not find post_install block in Podfile',
         )
       }
-      contents = contents.replace(anchor, (m) => m + PATCH)
+      contents = contents.replace(anchor, (_, head, tail) => head + PATCH + tail)
       fs.writeFileSync(podfilePath, contents)
       return mod
     },

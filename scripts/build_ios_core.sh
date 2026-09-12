@@ -217,10 +217,14 @@ make_xcframework() {
     mkdir -p "$headers/OrcaCore"
     cp "$PROJECT_DIR/src/mobile/core/"*.hpp "$headers/OrcaCore/"
 
+    # CocoaPods vendored_xcframeworks refuses slices whose static archives have
+    # different filenames, so each slice's libOrcaCore.a lives in its own
+    # directory. xcodebuild -create-xcframework accepts identical basenames.
     local args=()
     for slice in $SLICE_LIST; do
-        merge_slice "$slice" "$out_dir/libOrcaCore-$slice.a"
-        args+=(-library "$out_dir/libOrcaCore-$slice.a" -headers "$headers")
+        mkdir -p "$out_dir/$slice"
+        merge_slice "$slice" "$out_dir/$slice/libOrcaCore.a"
+        args+=(-library "$out_dir/$slice/libOrcaCore.a" -headers "$headers")
     done
     (
         set -x

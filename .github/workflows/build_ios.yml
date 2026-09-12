@@ -150,7 +150,7 @@ jobs:
           set -e
           args=()
           for slice in device simulator; do
-            lib="slices/orca-core-ios-$slice/libOrcaCore-$slice.a"
+            lib="slices/orca-core-ios-$slice/$slice/libOrcaCore.a"
             test -f "$lib"
             args+=(-library "$lib" -headers "slices/orca-core-ios-$slice/include")
           done
