@@ -1,9 +1,12 @@
 import React, { forwardRef } from 'react'
-import { ActivityIndicator, Pressable, Text } from 'react-native'
+import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 
-type Props = {
+// The remaining Pressable props pass through. Typed as an intersection rather than a
+// string index signature: forwardRef's PropsWithoutRef turns a type with an index
+// signature into one where every named prop is unknown.
+type Props = Omit<PressableProps, 'onPress' | 'disabled' | 'className'> & {
   title: string
   onPress?: () => void
   variant?: Variant
@@ -11,7 +14,6 @@ type Props = {
   loading?: boolean
   fullWidth?: boolean
   className?: string
-  [extra: string]: unknown
 }
 
 // Variant-driven class sets. Using strings so NativeWind can pre-compile them
