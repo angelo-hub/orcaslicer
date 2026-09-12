@@ -1,10 +1,10 @@
-// NativeWind v5 preview transforms className via its own babel plugin; the
-// jsxImportSource trick some v4 setups use is not needed here (and would
-// emit "not listed in exports" warnings, because the preview package does
-// not ship its own jsx-runtime).
+// NativeWind v4 pairs a jsxImportSource with its own babel plugin. Both are
+// needed: the jsxImportSource routes JSX creation through NativeWind so
+// className is understood, and the plugin injects the className→style
+// transform.
 module.exports = function (api) {
   api.cache(true)
   return {
-    presets: ['babel-preset-expo', 'nativewind/babel'],
+    presets: [['babel-preset-expo', { jsxImportSource: 'nativewind' }], 'nativewind/babel'],
   }
 }
