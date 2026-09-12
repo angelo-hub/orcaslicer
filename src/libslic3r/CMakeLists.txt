@@ -528,7 +528,9 @@ cmake_policy(SET CMP0011 NEW)
 # can't reach it; the default opts its Boost lookup into BoostConfig (CMP0167).
 set(CMAKE_POLICY_DEFAULT_CMP0167 NEW)
 find_package(CGAL REQUIRED)
-find_package(OpenCV REQUIRED core)
+# The modules the sources include. A deps build ships them all in opencv_world and
+# OpenCV_LIBS resolves to it; a system OpenCV has one library per module.
+find_package(OpenCV REQUIRED core imgproc imgcodecs)
 find_package(assimp REQUIRED)
 unset(CMAKE_POLICY_DEFAULT_CMP0167)
 cmake_policy(POP)
@@ -623,7 +625,7 @@ target_link_libraries(libslic3r
         libigl
         libnest2d
         miniz
-        opencv_world
+        ${OpenCV_LIBS}
         assimp::assimp
     PRIVATE
         ${CMAKE_DL_LIBS}
