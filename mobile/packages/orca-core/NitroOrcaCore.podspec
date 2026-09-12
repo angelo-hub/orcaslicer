@@ -27,10 +27,13 @@ Pod::Spec.new do |s|
   s.public_header_files = ["ios/OrcaViewportRenderer.h"]
 
   s.vendored_frameworks = "ios/OrcaCore.xcframework"
-  # The core is a static archive of C++ code; iconv, libz and libc++ come from
-  # the iOS system so the archive can stay lean.
-  s.libraries = "c++", "iconv", "z"
-  s.frameworks = "Foundation", "ModelIO", "Metal", "MetalKit", "QuartzCore"
+  # The core is a static archive of C++ code; iconv, libz, liblzma and libc++
+  # come from the iOS system so the archive can stay lean. liblzma satisfies
+  # openexr's deep-image compressor and CoreGraphics resolves the CG* imports
+  # that OpenCV's ImageIO backend and Model I/O reach for on Apple. libpng is
+  # bundled inside OrcaCore because iOS ships none.
+  s.libraries = "c++", "iconv", "z", "lzma"
+  s.frameworks = "Foundation", "ModelIO", "Metal", "MetalKit", "QuartzCore", "CoreGraphics"
 
   s.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",

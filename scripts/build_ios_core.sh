@@ -197,11 +197,41 @@ build_core() {
 merge_slice() {
     slice_settings "$1"
     local out="$2"
+
+    # libjpeg-turbo installs libturbojpeg.a alongside libjpeg.a with the same
+    # standard-libjpeg symbols; Qhull installs both a non-reentrant and a
+    # reentrant static variant, but libslic3r only reaches for the reentrant
+    # one through libqhullcpp. Skip the duplicates so libtool -static does not
+    # collide on the merge.
+    local -a skip=( libturbojpeg.a libqhullstatic.a )
+
+    # libqhullstatic_r.a and libqhullcpp.a both ship a default qh_fprintf
+    # symbol (as a user-overridable stub); the C++ wrapper's copy is the one
+    # libslic3r's callers use. Strip the C-side default so libtool does not
+    # see duplicates.
+    local qhull_r_slim=""
+    if [ -f "$DEPS_PREFIX/lib/libqhullstatic_r.a" ]; then
+        qhull_r_slim="$CORE_BUILD_DIR/libqhullstatic_r-slim.a"
+        cp "$DEPS_PREFIX/lib/libqhullstatic_r.a" "$qhull_r_slim"
+        xcrun ar d "$qhull_r_slim" userprintf_r.c.o userprintf_rbox_r.c.o 2>/dev/null || true
+        skip+=( libqhullstatic_r.a )
+    fi
+
+    # In-tree libraries live under src/ and deps_src/; a few — semver, today — land
+    # in the build tree's top-level lib/ instead.
     local libs=()
-    while IFS= read -r lib; do libs+=("$lib"); done < <(
-        find "$CORE_BUILD_DIR/src" "$CORE_BUILD_DIR/deps_src" -name '*.a' -type f 2>/dev/null
+    local candidate name skipthis
+    while IFS= read -r candidate; do
+        name=$(basename "$candidate")
+        skipthis=""
+        for s in "${skip[@]}"; do [ "$name" = "$s" ] && skipthis=1 && break; done
+        [ -z "$skipthis" ] && libs+=("$candidate")
+    done < <(
+        find "$CORE_BUILD_DIR/src" "$CORE_BUILD_DIR/deps_src" "$CORE_BUILD_DIR/lib" \
+            -name '*.a' -type f 2>/dev/null
         find "$DEPS_PREFIX/lib" -maxdepth 1 -name '*.a' -type f 2>/dev/null
     )
+    [ -n "$qhull_r_slim" ] && libs+=("$qhull_r_slim")
     if [ "${#libs[@]}" -eq 0 ]; then
         echo "No static libraries found for slice $1" >&2
         exit 1
