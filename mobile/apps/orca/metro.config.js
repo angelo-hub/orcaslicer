@@ -18,10 +18,12 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ]
-config.resolver.disableHierarchicalLookup = true
-// pnpm's virtual store keeps every package at .pnpm/<name>@<version>_<peers>/node_modules/<name>.
-// Metro follows symlinks by default; leave that on so require walks the same
-// tree the runtime linker would.
+// Hierarchical lookup stays on: pnpm's isolated store puts every
+// transitive dep as a symlink inside .pnpm/<pkg>@<ver>_<peers>/node_modules/,
+// and Metro reaches those by walking up from the importing file — the same
+// path Node uses. Disabling the lookup broke imports like @expo/metro-runtime
+// from expo-router's own entry file.
+config.resolver.disableHierarchicalLookup = false
 config.resolver.unstable_enableSymlinks = true
 
 module.exports = withNativeWind(config, { input: './global.css' })
