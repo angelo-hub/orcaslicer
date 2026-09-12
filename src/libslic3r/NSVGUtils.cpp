@@ -1,4 +1,5 @@
 #include "NSVGUtils.hpp"
+#include <sstream>
 #include <array>
 #include <charconv> // to_chars
 
