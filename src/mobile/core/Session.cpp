@@ -12,7 +12,9 @@
 #include "libslic3r/PrintBase.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/TriangleMesh.hpp"
+#include "libslic3r/Utils.hpp"
 
+#include <boost/filesystem.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -104,6 +106,21 @@ Session::~Session() = default;
 
 std::string Session::load_presets()
 {
+    // The data directory layout (system, user, ota) that PresetBundle reads; the
+    // desktop application creates it at startup.
+    m_impl->bundle.setup_directories();
+
+    // System presets are read from data_dir/system, where the desktop's updater
+    // installs the vendors the user enabled from resources/profiles. Here every vendor
+    // present in the resources is installed, and refreshed when the resources carry a
+    // newer version: the app puts only the vendors it fetched there.
+    std::vector<std::string> to_install;
+    for (const std::string& vendor : vendor_names_in(boost::filesystem::path(resources_dir()) / "profiles"))
+        if (! is_vendor_installed(vendor) || installed_vendor_version(vendor) < resource_vendor_version(vendor))
+            to_install.push_back(vendor);
+    if (! to_install.empty())
+        install_vendor_bundles_from_resources(to_install);
+
     AppConfig app_config;
     if (! app_config.load_if_exists().empty())
         app_config.reset();
@@ -452,9 +469,9 @@ MeshData Session::mesh(unsigned long id) const
     if (obj == nullptr)
         return out;
 
-    TriangleMesh mesh = obj->mesh();
-    if (! obj->instances.empty())
-        mesh.transform(obj->instances.front()->get_matrix(), true);
+    // ModelObject::mesh() is the object's volumes placed by every instance, so it is
+    // already in world space.
+    const TriangleMesh mesh = obj->mesh();
 
     const indexed_triangle_set& its = mesh.its;
     out.triangles = static_cast<unsigned long>(its.indices.size());
