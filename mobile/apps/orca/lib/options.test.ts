@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { describe, expect, test } from 'vitest'
 
 import type { OptionDefinition } from 'react-native-orca-core'
 
@@ -32,52 +31,51 @@ function def(partial: Partial<OptionDefinition>): OptionDefinition {
   }
 }
 
-test('C-style escapes round-trip', () => {
-  const text = 'M104 S{temperature}\n; "quoted" \\ tab\t'
-  assert.equal(unescapeCStyle(escapeCStyle(text)), text)
-  assert.equal(escapeCStyle('a\nb'), '"a\\nb"')
-  assert.equal(unescapeCStyle('plain'), 'plain')
-})
+describe('options helpers', () => {
+  test('C-style escapes round-trip', () => {
+    const text = 'M104 S{temperature}\n; "quoted" \\ tab\t'
+    expect(unescapeCStyle(escapeCStyle(text))).toBe(text)
+    expect(escapeCStyle('a\nb')).toBe('"a\\nb"')
+    expect(unescapeCStyle('plain')).toBe('plain')
+  })
 
-test('string vectors split on unquoted semicolons only', () => {
-  assert.deepEqual(splitStrings('"a;b";"c"'), ['"a;b"', '"c"'])
-  assert.deepEqual(splitStrings('"x\\";y";"z"'), ['"x\\";y"', '"z"'])
-  assert.deepEqual(splitStrings(''), [])
-})
+  test('string vectors split on unquoted semicolons only', () => {
+    expect(splitStrings('"a;b";"c"')).toEqual(['"a;b"', '"c"'])
+    expect(splitStrings('"x\\";y";"z"')).toEqual(['"x\\";y"', '"z"'])
+    expect(splitStrings('')).toEqual([])
+  })
 
-test('single-element vectors get scalar editors, longer ones stay raw', () => {
-  const temps = def({ key: 'nozzle_temperature', type: 'int', vector: true })
-  assert.equal(editorKind(temps, '220'), 'number')
-  assert.equal(editorKind(temps, '220,215'), 'raw')
-  assert.equal(editorKind(def({ type: 'bool' }), '1'), 'bool')
-  assert.equal(editorKind(def({ type: 'enum' }), 'grid'), 'enum')
-  assert.equal(editorKind(def({ key: 'filament_start_gcode', type: 'string', vector: true }), '"M104"'), 'code')
-})
+  test('single-element vectors get scalar editors, longer ones stay raw', () => {
+    const temps = def({ key: 'nozzle_temperature', type: 'int', vector: true })
+    expect(editorKind(temps, '220')).toBe('number')
+    expect(editorKind(temps, '220,215')).toBe('raw')
+    expect(editorKind(def({ type: 'bool' }), '1')).toBe('bool')
+    expect(editorKind(def({ type: 'enum' }), 'grid')).toBe('enum')
+    expect(editorKind(def({ key: 'filament_start_gcode', type: 'string', vector: true }), '"M104"')).toBe('code')
+  })
 
-test('scalar encode keeps the vector shape', () => {
-  const temps = def({ key: 'nozzle_temperature', type: 'int', vector: true })
-  assert.equal(decodeScalar(temps, '220,215'), '220')
-  assert.equal(encodeScalar(temps, '220,215', '230'), '230,215')
-  assert.equal(encodeScalar(temps, '220', '230'), '230')
+  test('scalar encode keeps the vector shape', () => {
+    const temps = def({ key: 'nozzle_temperature', type: 'int', vector: true })
+    expect(decodeScalar(temps, '220,215')).toBe('220')
+    expect(encodeScalar(temps, '220,215', '230')).toBe('230,215')
+    expect(encodeScalar(temps, '220', '230')).toBe('230')
 
-  const gcode = def({ key: 'filament_start_gcode', type: 'string', vector: true })
-  assert.equal(decodeScalar(gcode, '"M104 S200\\nG28"'), 'M104 S200\nG28')
-  assert.equal(encodeScalar(gcode, '"old"', 'M104\n'), '"M104\\n"')
-})
+    const gcode = def({ key: 'filament_start_gcode', type: 'string', vector: true })
+    expect(decodeScalar(gcode, '"M104 S200\\nG28"')).toBe('M104 S200\nG28')
+    expect(encodeScalar(gcode, '"old"', 'M104\n')).toBe('"M104\\n"')
+  })
 
-test('mode filter and category grouping', () => {
-  const simple = def({ key: 'a', mode: 0 })
-  const expert = def({ key: 'b', mode: 2, category: 'Speed' })
-  assert.equal(visibleInMode(expert, 'simple'), false)
-  assert.equal(visibleInMode(expert, 'expert'), true)
-  assert.equal(visibleInMode(simple, 'simple'), true)
-  const groups = groupByCategory([simple, expert, def({ key: 'c', category: '' })])
-  assert.deepEqual(
-    groups.map((g) => [g.category, g.options.map((o) => o.key)]),
-    [
+  test('mode filter and category grouping', () => {
+    const simple = def({ key: 'a', mode: 0 })
+    const expert = def({ key: 'b', mode: 2, category: 'Speed' })
+    expect(visibleInMode(expert, 'simple')).toBe(false)
+    expect(visibleInMode(expert, 'expert')).toBe(true)
+    expect(visibleInMode(simple, 'simple')).toBe(true)
+    const groups = groupByCategory([simple, expert, def({ key: 'c', category: '' })])
+    expect(groups.map((g) => [g.category, g.options.map((o) => o.key)])).toEqual([
       ['Quality', ['a']],
       ['Speed', ['b']],
       ['Other', ['c']],
-    ]
-  )
+    ])
+  })
 })

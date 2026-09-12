@@ -11,11 +11,14 @@
     "android": "pnpm i18n && expo run:android",
     "prebuild": "pnpm i18n && expo prebuild",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test \"lib/**/*.test.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "i18n": "node ../../scripts/i18n.mjs"
   },
   "dependencies": {
+    "@tanstack/query-async-storage-persister": "^5.102.8",
     "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query-persist-client": "^5.102.8",
     "expo": "~57.0.21",
     "expo-constants": "~57.0.17",
     "expo-document-picker": "~57.0.1",
@@ -27,6 +30,7 @@
     "nativewind": "5.0.0-preview.4",
     "react": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-mmkv": "^4.3.2",
     "react-native-nitro-modules": "0.37.1",
     "react-native-orca-core": "workspace:*",
     "react-native-reanimated": "^4.6.0",
@@ -37,6 +41,8 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "@types/react": "^19.2.15",
-    "typescript": "^5.9.3"
+    "@vitest/expect": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
   }
 }

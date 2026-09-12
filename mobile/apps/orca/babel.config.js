@@ -1,12 +1,10 @@
-// Expo's default babel preset plus NativeWind's className transform. Ordering
-// matters: NativeWind must come after the preset so it sees the JSX after
-// Expo's preset expands it.
+// NativeWind v5 preview transforms className via its own babel plugin; the
+// jsxImportSource trick some v4 setups use is not needed here (and would
+// emit "not listed in exports" warnings, because the preview package does
+// not ship its own jsx-runtime).
 module.exports = function (api) {
   api.cache(true)
   return {
-    presets: [
-      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
-      'nativewind/babel',
-    ],
+    presets: ['babel-preset-expo', 'nativewind/babel'],
   }
 }

@@ -3,14 +3,12 @@ import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-n
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 
-// The remaining Pressable props pass through. Typed as an intersection rather than a
-// string index signature: forwardRef's PropsWithoutRef turns a type with an index
-// signature into one where every named prop is unknown.
-type Props = Omit<PressableProps, 'onPress' | 'disabled' | 'className'> & {
+// The remaining Pressable props pass through. Typed as an intersection rather
+// than a string index signature: forwardRef's PropsWithoutRef turns a type
+// with an index signature into one where every named prop is unknown.
+type Props = Omit<PressableProps, 'style' | 'className'> & {
   title: string
-  onPress?: () => void
   variant?: Variant
-  disabled?: boolean
   loading?: boolean
   fullWidth?: boolean
   className?: string
