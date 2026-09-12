@@ -27,8 +27,9 @@ Pod::Spec.new do |s|
   s.public_header_files = ["ios/OrcaViewportRenderer.h"]
 
   s.vendored_frameworks = "ios/OrcaCore.xcframework"
-  # The core is a static archive of C++ code; the app links libc++ already.
-  s.libraries = "c++", "iconv"
+  # The core is a static archive of C++ code; iconv, libz and libc++ come from
+  # the iOS system so the archive can stay lean.
+  s.libraries = "c++", "iconv", "z"
   s.frameworks = "Foundation", "ModelIO", "Metal", "MetalKit", "QuartzCore"
 
   s.pod_target_xcconfig = {

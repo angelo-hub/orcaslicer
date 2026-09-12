@@ -344,10 +344,7 @@ if(FLATPAK)
 endif()
 
 set(ZLIB_PKG "")
-if (NOT ZLIB_FOUND OR DEPS_MOBILE)
-    # The iOS SDK ships zlib as a .tbd stub, which find_package accepts, but
-    # nothing in that stub survives libtool -static when the xcframework is
-    # merged. A static build is what makes the archive self-contained.
+if (NOT ZLIB_FOUND)
     include(ZLIB/ZLIB.cmake)
     set(ZLIB_PKG dep_ZLIB)
 endif ()
