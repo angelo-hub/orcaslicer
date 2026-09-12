@@ -1,3 +1,7 @@
+// nanosvg is header-only: exactly one TU in the library must instantiate its
+// definitions, and libslic3r is the lowest layer that reaches for nsvgDelete
+// and friends. The GUI still owns the rasterizer implementation.
+#define NANOSVG_IMPLEMENTATION
 #include "NSVGUtils.hpp"
 #include <sstream>
 #include <array>
