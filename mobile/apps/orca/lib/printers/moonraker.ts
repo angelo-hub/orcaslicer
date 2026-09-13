@@ -62,4 +62,14 @@ export const moonraker: PrinterClient = {
       throw new Error(`Upload failed: Moonraker ${response.status} ${await response.text()}`)
     }
   },
+
+  async pause(host) { await control(host, 'pause') },
+  async resume(host) { await control(host, 'resume') },
+  async cancel(host) { await control(host, 'cancel') },
+}
+
+async function control(host: PrinterHost, action: 'pause' | 'resume' | 'cancel'): Promise<void> {
+  const base = normalizeUrl(host.url)
+  const response = await fetch(`${base}/printer/print/${action}`, { method: 'POST', headers: headers(host) })
+  if (!response.ok) throw new Error(`Moonraker ${action} failed: ${response.status} ${await response.text()}`)
 }

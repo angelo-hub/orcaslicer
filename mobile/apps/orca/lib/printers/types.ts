@@ -41,6 +41,10 @@ export interface PrinterClient {
   info(host: PrinterHost): Promise<string>
   status(host: PrinterHost): Promise<PrinterStatus>
   upload(host: PrinterHost, options: UploadOptions): Promise<void>
+  /** Print-job control. Idempotent — the host returns success even if the command doesn't apply. */
+  pause(host: PrinterHost): Promise<void>
+  resume(host: PrinterHost): Promise<void>
+  cancel(host: PrinterHost): Promise<void>
 }
 
 /** Base URL with no trailing slash. */

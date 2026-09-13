@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams } from 'expo-router'
 import React, { useCallback, useMemo, useState } from 'react'
-import { Button, FlatList, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { FlatList, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native'
 import { getOptionDefinitions, type OptionDefinition, type OrcaSession, type PresetKind } from 'react-native-orca-core'
 
 import { useSession } from '@/lib/core'
@@ -18,12 +18,19 @@ import {
   visibleInMode,
   type OptionMode,
 } from '@/lib/options'
+import { Button } from '@/ui/Button'
+import { Card } from '@/ui/Card'
+import { Chip } from '@/ui/Chip'
 
-// The parameter editor. Nothing here is written per option: rows are generated from the
-// option definitions the core exports, grouped by category and filtered by mode and
-// search, and every edit goes through Session.set_option in serialized form.
+// The parameter editor. Rows are generated from the option definitions the
+// core exports, grouped by category and filtered by mode and search; every
+// edit goes through Session.set_option in serialized form.
 
-const TITLES: Record<PresetKind, string> = { printer: 'Printer settings', filament: 'Filament settings', process: 'Process settings' }
+const TITLES: Record<PresetKind, string> = {
+  printer: 'Printer settings',
+  filament: 'Filament settings',
+  process: 'Process settings',
+}
 const MODES: OptionMode[] = ['simple', 'advanced', 'expert']
 
 function isPresetKind(value: string | string[] | undefined): value is PresetKind {
@@ -35,9 +42,10 @@ interface RowProps {
   session: OrcaSession
   modified: boolean
   onChanged: () => void
+  last?: boolean
 }
 
-function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.Element {
+function OptionRow({ def, session, modified, onChanged, last = false }: RowProps): React.JSX.Element {
   const serialized = session.option(def.key)
   const kind = editorKind(def, serialized)
   const [draft, setDraft] = useState<string | null>(null)
@@ -50,7 +58,7 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
       setError(!ok)
       if (ok) onChanged()
     },
-    [def.key, session, onChanged]
+    [def.key, session, onChanged],
   )
 
   const scalar = decodeScalar(def, serialized)
@@ -59,33 +67,66 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
   let editor: React.JSX.Element
   switch (kind) {
     case 'bool':
-      editor = <Switch value={decodeBool(scalar)} disabled={def.readonly} onValueChange={(v) => commit(encodeScalar(def, serialized, encodeBool(v)))} />
+      editor = (
+        <Switch
+          value={decodeBool(scalar)}
+          disabled={def.readonly}
+          onValueChange={(v) => commit(encodeScalar(def, serialized, encodeBool(v)))}
+        />
+      )
       break
     case 'enum': {
       const index = def.enumValues?.indexOf(scalar) ?? -1
       const shown = index >= 0 ? t(def.enumLabels?.[index] ?? scalar) : scalar
       editor = (
-        <View>
-          <Button title={shown === '' ? 'Choose' : shown} disabled={def.readonly} onPress={() => setPicking(true)} />
-          <Modal visible={picking} animationType="slide" onRequestClose={() => setPicking(false)}>
-            <FlatList
-              data={def.enumValues ?? []}
-              keyExtractor={(v) => v}
-              contentContainerStyle={styles.modalList}
-              renderItem={({ item, index: i }) => (
-                <Pressable
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setPicking(false)
-                    commit(encodeScalar(def, serialized, item))
-                  }}>
-                  <Text style={[styles.value, item === scalar && styles.selected]}>{t(def.enumLabels?.[i] ?? item)}</Text>
+        <>
+          <Pressable
+            onPress={def.readonly ? undefined : () => setPicking(true)}
+            className={`rounded-lg bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800 ${def.readonly ? 'opacity-40' : 'active:opacity-60'}`}
+          >
+            <Text className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={1}>
+              {shown === '' ? 'Choose' : shown}
+            </Text>
+          </Pressable>
+          <Modal
+            visible={picking}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={() => setPicking(false)}
+          >
+            <View className="flex-1 bg-neutral-50 dark:bg-neutral-950">
+              <View className="flex-row items-center justify-between border-b border-neutral-100 px-5 pb-3 pt-4 dark:border-neutral-800">
+                <Text className="text-[17px] font-semibold text-neutral-900 dark:text-neutral-100">{label}</Text>
+                <Pressable hitSlop={8} onPress={() => setPicking(false)}>
+                  <Text className="text-[15px] font-semibold text-neutral-500">Cancel</Text>
                 </Pressable>
-              )}
-              ListFooterComponent={<Button title="Cancel" onPress={() => setPicking(false)} />}
-            />
+              </View>
+              <FlatList
+                data={def.enumValues ?? []}
+                keyExtractor={(v) => v}
+                contentContainerClassName="px-5 pt-4 pb-8"
+                renderItem={({ item, index: i }) => {
+                  const isSelected = item === scalar
+                  const isLast = i === (def.enumValues?.length ?? 0) - 1
+                  return (
+                    <Pressable
+                      onPress={() => {
+                        setPicking(false)
+                        commit(encodeScalar(def, serialized, item))
+                      }}
+                      className={`flex-row items-center gap-3 bg-white px-4 py-3 dark:bg-neutral-900 ${i === 0 ? 'rounded-t-2xl' : ''} ${isLast ? 'rounded-b-2xl' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+                    >
+                      <Text className="flex-1 text-[15px] text-neutral-900 dark:text-neutral-100">
+                        {t(def.enumLabels?.[i] ?? item)}
+                      </Text>
+                      {isSelected ? <Text className="text-[18px] text-neutral-900 dark:text-white">✓</Text> : null}
+                    </Pressable>
+                  )
+                }}
+              />
+            </View>
           </Modal>
-        </View>
+        </>
       )
       break
     }
@@ -97,10 +138,15 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
     case 'raw': {
       const isPercent = kind === 'percent'
       const shownValue = draft ?? (isPercent ? decodePercent(scalar) : kind === 'raw' ? serialized : scalar)
+      const inputClasses = [
+        'rounded-lg bg-neutral-100 px-3 py-2 text-[14px] text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100',
+        kind === 'code' ? 'min-h-[80px] text-left font-mono text-[12px]' : 'min-w-[64px] text-right',
+        error ? 'border border-red-500' : '',
+      ].join(' ')
       editor = (
-        <View style={styles.inputRow}>
+        <View className="flex-row items-center gap-1">
           <TextInput
-            style={[styles.input, kind === 'code' && styles.code, error && styles.inputError]}
+            className={inputClasses}
             value={shownValue}
             editable={!def.readonly}
             multiline={kind === 'code'}
@@ -115,8 +161,8 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
               setDraft(null)
             }}
           />
-          {def.unit !== '' ? <Text style={styles.unit}>{t(def.unit)}</Text> : null}
-          {isPercent ? <Text style={styles.unit}>%</Text> : null}
+          {def.unit !== '' ? <Text className="text-[13px] text-neutral-500">{t(def.unit)}</Text> : null}
+          {isPercent ? <Text className="text-[13px] text-neutral-500">%</Text> : null}
         </View>
       )
       break
@@ -124,20 +170,26 @@ function OptionRow({ def, session, modified, onChanged }: RowProps): React.JSX.E
   }
 
   return (
-    <View style={styles.row}>
-      <View style={styles.labelColumn}>
-        <Text style={styles.label}>
-          {modified ? '● ' : ''}
-          {label}
-        </Text>
+    <View
+      className={`flex-row items-start gap-3 px-4 py-3 ${last ? '' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+    >
+      <View className="flex-1">
+        <View className="flex-row items-center gap-2">
+          {modified ? <View className="h-1.5 w-1.5 rounded-full bg-accent-500" /> : null}
+          <Text className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={2}>
+            {label}
+          </Text>
+        </View>
         {def.tooltip !== '' ? (
-          <Text style={styles.tooltip} numberOfLines={3}>
+          <Text className="mt-1 text-[12px] leading-4 text-neutral-500 dark:text-neutral-400" numberOfLines={3}>
             {t(def.tooltip)}
           </Text>
         ) : null}
-        {error ? <Text style={styles.error}>Not a valid value for this option</Text> : null}
+        {error ? (
+          <Text className="mt-1 text-[12px] text-red-500">Not a valid value for this option.</Text>
+        ) : null}
       </View>
-      <View style={styles.editorColumn}>{editor}</View>
+      <View className="min-w-[110px] items-end justify-center">{editor}</View>
     </View>
   )
 }
@@ -155,95 +207,99 @@ export default function SettingsScreen(): React.JSX.Element {
 
   const definitions = useMemo(
     () => getOptionDefinitions().filter((d) => d.kind === kind && visibleInMode(d, mode) && matchesQuery(d, query)),
-    [kind, mode, query]
+    [kind, mode, query],
   )
   const groups = useMemo(() => groupByCategory(definitions), [definitions])
   const shownGroups = category === null ? groups : groups.filter((g) => g.category === category)
   const modified = useMemo(() => new Set(session?.modifiedOptions(kind) ?? []), [session, kind, revision])
 
   if (session === null) {
-    return <View />
+    return <View className="flex-1 bg-neutral-50 dark:bg-neutral-950" />
   }
 
-  const rows: Array<{ header: string } | { def: OptionDefinition }> = []
-  for (const group of shownGroups) {
-    rows.push({ header: group.category })
-    for (const def of group.options) rows.push({ def })
-  }
+  const currentPreset = session.selectedPreset(kind)
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ title: `${TITLES[kind]}: ${session.selectedPreset(kind)}` }} />
-      <View style={styles.toolbar}>
-        <TextInput style={styles.search} placeholder="Search settings" value={query} onChangeText={setQuery} autoCorrect={false} autoCapitalize="none" clearButtonMode="while-editing" />
-        <View style={styles.modes}>
-          {MODES.map((m) => (
-            <Pressable key={m} onPress={() => setMode(m)} style={[styles.modeChip, mode === m && styles.modeChipActive]}>
-              <Text style={mode === m ? styles.modeTextActive : styles.modeText}>{m}</Text>
-            </Pressable>
-          ))}
+    <View className="flex-1 bg-neutral-50 dark:bg-neutral-950">
+      <Stack.Screen options={{ title: TITLES[kind] }} />
+
+      <View className="border-b border-neutral-100 bg-white px-5 pb-3 pt-3 dark:border-neutral-800 dark:bg-neutral-900">
+        <Text className="mb-2 text-[13px] text-neutral-500 dark:text-neutral-400" numberOfLines={1}>
+          Editing <Text className="font-semibold text-neutral-900 dark:text-neutral-100">{currentPreset}</Text>
+        </Text>
+        <View className="flex-row items-center rounded-2xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800">
+          <Text className="mr-2 text-[15px] text-neutral-400">Search</Text>
+          <TextInput
+            className="flex-1 text-[15px] text-neutral-900 dark:text-neutral-100"
+            placeholder="setting name…"
+            placeholderTextColor="#9ca3af"
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+          />
+        </View>
+        <View className="mt-3 flex-row items-center gap-2">
+          <View className="flex-row gap-1.5">
+            {MODES.map((m) => (
+              <Chip key={m} label={m.charAt(0).toUpperCase() + m.slice(1)} selected={mode === m} onPress={() => setMode(m)} />
+            ))}
+          </View>
           {modified.size > 0 ? (
-            <Button
-              title={`Discard ${modified.size}`}
-              onPress={() => {
-                session.discardModifiedOptions(kind)
-                onChanged()
-              }}
-            />
+            <View className="ml-auto">
+              <Button
+                title={`Discard ${modified.size}`}
+                variant="ghost"
+                onPress={() => {
+                  session.discardModifiedOptions(kind)
+                  onChanged()
+                }}
+              />
+            </View>
           ) : null}
         </View>
-        <FlatList
-          horizontal
-          data={[null, ...groups.map((g) => g.category)]}
-          keyExtractor={(c) => c ?? '*'}
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => setCategory(item)} style={[styles.modeChip, category === item && styles.modeChipActive]}>
-              <Text style={category === item ? styles.modeTextActive : styles.modeText}>{item === null ? 'All' : t(item)}</Text>
-            </Pressable>
-          )}
-        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
+          <View className="flex-row gap-1.5">
+            <Chip label="All" selected={category === null} onPress={() => setCategory(null)} />
+            {groups.map((g) => (
+              <Chip
+                key={g.category}
+                label={t(g.category)}
+                selected={category === g.category}
+                onPress={() => setCategory(g.category)}
+              />
+            ))}
+          </View>
+        </ScrollView>
       </View>
-      <FlatList
-        data={rows}
-        extraData={revision}
-        keyExtractor={(row) => ('header' in row ? `#${row.header}` : row.def.key)}
-        ListEmptyComponent={<Text style={styles.tooltip}>No settings match</Text>}
-        renderItem={({ item }) =>
-          'header' in item ? (
-            <Text style={styles.header}>{t(item.header)}</Text>
-          ) : (
-            <OptionRow def={item.def} session={session} modified={modified.has(item.def.key)} onChanged={onChanged} />
-          )
-        }
-      />
+
+      <ScrollView contentContainerClassName="px-4 pt-4 pb-8">
+        {shownGroups.length === 0 ? (
+          <Text className="px-4 py-8 text-center text-[15px] text-neutral-500">No settings match.</Text>
+        ) : (
+          shownGroups.map((group, groupIdx) => (
+            <Card
+              key={group.category}
+              title={t(group.category)}
+              className="mb-4"
+              padded={false}
+              index={groupIdx}
+            >
+              {group.options.map((def, i) => (
+                <OptionRow
+                  key={def.key}
+                  def={def}
+                  session={session}
+                  modified={modified.has(def.key)}
+                  onChanged={onChanged}
+                  last={i === group.options.length - 1}
+                />
+              ))}
+            </Card>
+          ))
+        )}
+      </ScrollView>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: { padding: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#ccc' },
-  search: { padding: 10, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: '#999' },
-  modes: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modeChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#eee', marginRight: 6 },
-  modeChipActive: { backgroundColor: '#0d7f62' },
-  modeText: { color: '#333' },
-  modeTextActive: { color: '#fff', fontWeight: '600' },
-  header: { fontWeight: '700', fontSize: 15, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6, color: '#444' },
-  row: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' },
-  labelColumn: { flex: 1, gap: 2 },
-  editorColumn: { width: 150, justifyContent: 'center' },
-  label: { fontSize: 15 },
-  tooltip: { color: '#666', fontSize: 12 },
-  error: { color: '#b00020', fontSize: 12 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  input: { flex: 1, padding: 8, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: '#999', textAlign: 'right' },
-  inputError: { borderColor: '#b00020' },
-  code: { textAlign: 'left', fontFamily: 'Menlo', fontSize: 12, minHeight: 80 },
-  unit: { color: '#666' },
-  value: { fontSize: 16 },
-  selected: { fontWeight: '700' },
-  modalList: { paddingVertical: 48 },
-  modalItem: { paddingVertical: 12, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#ccc' },
-})

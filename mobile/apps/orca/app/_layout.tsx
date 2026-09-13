@@ -55,8 +55,8 @@ export default function RootLayout(): React.JSX.Element {
               headerRight: () => <DownloadsPill />,
             }}
           />
-          <Stack.Screen name="presets/[kind]" options={{ title: 'Choose preset' }} />
           <Stack.Screen name="settings/[kind]" options={{ title: 'Edit preset' }} />
+          <Stack.Screen name="host/[id]" options={{ title: 'Destination' }} />
           <Stack.Screen name="vendors" options={{ title: 'Choose printer' }} />
           <Stack.Screen name="printers" options={{ title: 'Printers' }} />
         </Stack>

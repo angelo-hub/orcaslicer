@@ -3,7 +3,7 @@ import { File, Paths } from 'expo-file-system'
 import { Link } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import React, { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { OrcaViewport, type ObjectInfo, type PresetInfo, type PresetKind, type SliceResult, type SliceStatistics, type ViewportMode } from 'react-native-orca-core'
 
 import { Alert as InlineAlert } from '@/ui/Alert'
@@ -16,7 +16,9 @@ import { SegmentedControl } from '@/ui/SegmentedControl'
 import { useCore } from '@/lib/core'
 import { t } from '@/lib/i18n'
 import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
+import { history, pushHistory, removeHistory, type HistoryEntry } from '@/lib/history'
 import { installedVendors, nativePath, removeVendor } from '@/lib/profiles'
+import { queryClient, queryKeys } from '@/lib/queries'
 
 const PRESET_KINDS: Array<{ kind: PresetKind; label: string }> = [
   { kind: 'printer', label: 'Printer' },
@@ -40,6 +42,7 @@ function offendingVendorIn(error: string): string | null {
 
 export default function HomeScreen(): React.JSX.Element {
   const { version, session, presetError, ready, reloadPresets } = useCore()
+  const [removing, setRemoving] = useState(false)
   const [objects, setObjects] = useState<ObjectInfo[]>([])
   const [selected, setSelected] = useState<Record<PresetKind, string>>({ printer: '', filament: '', process: '' })
   const [progress, setProgress] = useState<{ percent: number; message: string } | null>(null)
@@ -54,6 +57,7 @@ export default function HomeScreen(): React.JSX.Element {
   const [revision, setRevision] = useState(0)
   const [pickerKind, setPickerKind] = useState<PresetKind | null>(null)
   const [pickerPresets, setPickerPresets] = useState<PresetInfo[]>([])
+  const [pastSlices, setPastSlices] = useState<HistoryEntry[]>([])
 
   const refresh = useCallback(() => {
     if (session === null) return
@@ -74,6 +78,7 @@ export default function HomeScreen(): React.JSX.Element {
     if (ready) {
       refresh()
       setPrinters(loadPrinters())
+      setPastSlices(history())
     }
   }, [ready, refresh])
 
@@ -137,10 +142,21 @@ export default function HomeScreen(): React.JSX.Element {
         const out = new File(Paths.cache, 'plate_1.gcode')
         const written = await session.exportGCode(nativePath(out.parentDirectory) + '/plate_1.gcode')
         setGcodePath(written)
-        setStats(session.statistics())
+        const stats = session.statistics()
+        setStats(stats)
         setMaxLayer(-1)
         setViewMode('preview')
         setRevision((r) => r + 1)
+        pushHistory({
+          printer: selected.printer,
+          filament: selected.filament,
+          process: selected.process,
+          objectNames: objects.map((o) => o.name),
+          sourcePaths: [],
+          stats,
+          gcodePath: written,
+        })
+        setPastSlices(history())
       }
     } catch (error) {
       Alert.alert('Slicing failed', String(error))
@@ -254,9 +270,18 @@ export default function HomeScreen(): React.JSX.Element {
                       <Button
                         title={`Remove ${bad}`}
                         variant="destructive"
-                        onPress={() => {
-                          removeVendor(bad)
-                          void reloadPresets()
+                        loading={removing}
+                        disabled={removing}
+                        onPress={async () => {
+                          setRemoving(true)
+                          try {
+                            removeVendor(bad)
+                            await queryClient.invalidateQueries({ queryKey: queryKeys.installedVendors })
+                            await reloadPresets()
+                            refresh()
+                          } finally {
+                            setRemoving(false)
+                          }
                         }}
                       />
                     )
@@ -457,23 +482,78 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </Card>
 
+        {pastSlices.length > 0 ? (
+          <Card
+            className="mb-6"
+            index={3}
+            title="Recent"
+            subtitle={`${pastSlices.length} slice${pastSlices.length === 1 ? '' : 's'} in history`}
+            padded={false}
+          >
+            {pastSlices.slice(0, 5).map((h, i) => (
+              <View
+                key={h.id}
+                className={`flex-row items-center gap-3 px-4 py-3 ${i === Math.min(4, pastSlices.length - 1) ? '' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+              >
+                <View className="flex-1">
+                  <Text className="text-[15px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={1}>
+                    {h.objectNames.join(', ') || 'Untitled plate'}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-neutral-500 dark:text-neutral-400" numberOfLines={1}>
+                    {h.printer.replace(/^Default /, '')} · {formatDuration(h.stats.printTimeSeconds)} · {h.stats.filamentGrams.toFixed(1)} g
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    removeHistory(h.id)
+                    setPastSlices(history())
+                  }}
+                  hitSlop={8}
+                  className="rounded-full px-2 py-1 active:opacity-60"
+                >
+                  <Text className="text-[14px] font-semibold text-red-500">✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </Card>
+        ) : null}
+
         <Card
           className="mb-6"
-          index={3}
+          index={4}
           title="Destinations"
-          subtitle={printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(' · ')}
+          subtitle={printers.length === 0 ? 'None configured' : `${printers.length} configured`}
           padded={false}
         >
-          <Row>
-            <Link href="/printers" asChild>
-              <Button title="Manage destinations" variant="ghost" fullWidth />
+          {printers.map((p, i) => (
+            <Link key={p.id} href={{ pathname: '/host/[id]', params: { id: p.id } }} asChild>
+              <Row last={i === printers.length - 1 && printers.length > 0}>
+                <View className="flex-row items-center gap-3">
+                  <View className="flex-1">
+                    <Text className="text-[15px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                    <Text className="mt-0.5 text-[12px] text-neutral-500 dark:text-neutral-400" numberOfLines={1}>
+                      {p.url}
+                    </Text>
+                  </View>
+                  <Text className="text-[20px] leading-5 text-neutral-300 dark:text-neutral-600">›</Text>
+                </View>
+              </Row>
             </Link>
-          </Row>
-          <Row last>
-            <Link href="/vendors" asChild>
-              <Button title="Change printer" variant="ghost" fullWidth />
-            </Link>
-          </Row>
+          ))}
+          <View className="flex-row gap-2 border-t border-neutral-100 p-4 dark:border-neutral-800">
+            <View className="flex-1">
+              <Link href="/printers" asChild>
+                <Button title="Manage" variant="secondary" fullWidth />
+              </Link>
+            </View>
+            <View className="flex-1">
+              <Link href="/vendors" asChild>
+                <Button title="Change printer" variant="secondary" fullWidth />
+              </Link>
+            </View>
+          </View>
         </Card>
 
         <Text className="text-center text-[11px] uppercase tracking-widest text-neutral-400 dark:text-neutral-600">

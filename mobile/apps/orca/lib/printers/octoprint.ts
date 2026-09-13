@@ -69,4 +69,19 @@ export const octoprint: PrinterClient = {
       throw new Error(`Upload failed: OctoPrint ${response.status} ${await response.text()}`)
     }
   },
+
+  async pause(host) { await job(host, 'pause', 'pause') },
+  async resume(host) { await job(host, 'pause', 'resume') },
+  async cancel(host) { await job(host, 'cancel') },
+}
+
+async function job(host: PrinterHost, command: 'pause' | 'cancel', action?: 'pause' | 'resume' | 'toggle'): Promise<void> {
+  const base = normalizeUrl(host.url)
+  const body = action !== undefined ? { command, action } : { command }
+  const response = await fetch(`${base}/api/job`, {
+    method: 'POST',
+    headers: { ...headers(host), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(`OctoPrint ${command} failed: ${response.status} ${await response.text()}`)
 }
