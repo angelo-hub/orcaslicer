@@ -114,6 +114,15 @@ Session::~Session() = default;
 
 static std::string load_presets_into(PresetBundle& bundle, bool force_refresh)
 {
+    // Start every load from a clean bundle. PresetBundle::load_system_presets_from_json
+    // only resets `this` when the OrcaFilamentLibrary vendor happens to be the first one
+    // loaded (via load_vendor_configs_from_json's LoadSystem-triggered reset). Any user
+    // who has only picked one or two printers has no OrcaFilamentLibrary in
+    // data/system, so a second load_presets accumulates every vendor's presets on top
+    // of the previous call's — which is what surfaces as "Found duplicated settings in
+    // vendor <Name>'s json file lists" after a Remove-and-reload cycle. delete_files
+    // stays false so any user preset on disk survives.
+    bundle.reset(/*delete_files=*/false);
     bundle.setup_directories();
 
     namespace fs = boost::filesystem;
