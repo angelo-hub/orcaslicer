@@ -27,6 +27,7 @@ public:
 
   // Presets
   std::shared_ptr<Promise<std::string>> loadPresets() override;
+  std::shared_ptr<Promise<std::string>> reloadPresets() override;
   std::vector<PresetInfo> presets(PresetKind kind) override;
   std::string selectedPreset(PresetKind kind) override;
   bool selectPreset(PresetKind kind, const std::string& name) override;

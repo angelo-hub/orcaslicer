@@ -91,6 +91,8 @@ export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }
   readonly id: number
   /** Loads vendor profiles from the resources directory and user presets from the data directory. Resolves to an error text, empty on success. */
   loadPresets(): Promise<string>
+  /** Same as loadPresets, but first wipes the mirror at data/system so a same-version reinstall of a vendor really refreshes it (used after installing / removing a vendor). */
+  reloadPresets(): Promise<string>
   presets(kind: PresetKind): PresetInfo[]
   selectedPreset(kind: PresetKind): string
   /** Select by name. For filaments this selects extruder 0. */

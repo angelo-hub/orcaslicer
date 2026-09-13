@@ -112,18 +112,28 @@ struct Session::Impl
 Session::Session() : m_impl(std::make_unique<Impl>()) {}
 Session::~Session() = default;
 
-std::string Session::load_presets()
+static std::string load_presets_into(PresetBundle& bundle, bool force_refresh)
 {
-    // The data directory layout (system, user, ota) that PresetBundle reads; the
-    // desktop application creates it at startup.
-    m_impl->bundle.setup_directories();
+    bundle.setup_directories();
+
+    namespace fs = boost::filesystem;
+    const fs::path system_dir = fs::path(data_dir()) / "system";
 
     // System presets are read from data_dir/system, where the desktop's updater
-    // installs the vendors the user enabled from resources/profiles. Here every vendor
-    // present in the resources is installed, and refreshed when the resources carry a
-    // newer version: the app puts only the vendors it fetched there.
+    // installs the vendors the user enabled from resources/profiles. On a normal
+    // reload we only install the vendors whose version bumped; on a forced
+    // refresh (e.g. right after the app installed or removed a vendor) we wipe
+    // the mirror so a same-version reinstall really re-copies, including a
+    // vendor whose files were corrupt from a previous partial download, and a
+    // vendor removed from resources drops out of the mirror too.
+    if (force_refresh && fs::exists(system_dir)) {
+        boost::system::error_code ec;
+        fs::remove_all(system_dir, ec);
+        // ignore ec: a partial wipe is corrected by the reinstall that follows
+    }
+
     std::vector<std::string> to_install;
-    for (const std::string& vendor : vendor_names_in(boost::filesystem::path(resources_dir()) / "profiles"))
+    for (const std::string& vendor : vendor_names_in(fs::path(resources_dir()) / "profiles"))
         if (! is_vendor_installed(vendor) || installed_vendor_version(vendor) < resource_vendor_version(vendor))
             to_install.push_back(vendor);
     if (! to_install.empty())
@@ -133,9 +143,13 @@ std::string Session::load_presets()
     if (! app_config.load_if_exists().empty())
         app_config.reset();
     std::string errors;
-    m_impl->bundle.load_presets(app_config, ForwardCompatibilitySubstitutionRule::Enable, PresetBundle::PresetPreferences(), &errors);
+    bundle.load_presets(app_config, ForwardCompatibilitySubstitutionRule::Enable, PresetBundle::PresetPreferences(), &errors);
     return errors;
 }
+
+std::string Session::load_presets() { return load_presets_into(m_impl->bundle, /*force_refresh=*/false); }
+
+std::string Session::reload_presets() { return load_presets_into(m_impl->bundle, /*force_refresh=*/true); }
 
 std::vector<PresetInfo> Session::presets(PresetKind kind) const
 {

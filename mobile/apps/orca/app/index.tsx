@@ -6,12 +6,12 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native'
 import { OrcaViewport, type ObjectInfo, type PresetInfo, type PresetKind, type SliceResult, type SliceStatistics, type ViewportMode } from 'react-native-orca-core'
 
-import { Button } from '@/components/Button'
-import { Card } from '@/components/Card'
-import { PresetPicker } from '@/components/PresetPicker'
-import { PresetRow } from '@/components/PresetRow'
-import { ProgressBar } from '@/components/ProgressBar'
-import { SegmentedControl } from '@/components/SegmentedControl'
+import { Button } from '@/ui/Button'
+import { Card, Row } from '@/ui/Card'
+import { PresetPicker } from '@/ui/PresetPicker'
+import { PresetRow } from '@/ui/PresetRow'
+import { ProgressBar } from '@/ui/ProgressBar'
+import { SegmentedControl } from '@/ui/SegmentedControl'
 import { useCore } from '@/lib/core'
 import { t } from '@/lib/i18n'
 import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
@@ -185,48 +185,52 @@ export default function HomeScreen(): React.JSX.Element {
 
   if (!ready || session === null) {
     return (
-      <View className="flex-1 items-center justify-center gap-3 bg-gray-100 dark:bg-black">
+      <View className="flex-1 items-center justify-center gap-3 bg-gray-50 dark:bg-black">
         <ActivityIndicator color="#0a84ff" />
-        <Text className="text-base text-gray-700 dark:text-gray-300">Loading profiles</Text>
+        <Text className="text-[15px] text-gray-500 dark:text-gray-400">Loading profiles…</Text>
       </View>
     )
   }
 
   const vendors = installedVendors()
-  const canSlice = objects.length > 0 && vendors.length > 0
+  const canSlice = objects.length > 0 && vendors.length > 0 && selected.printer !== ''
   const stepValid = (l: number) => (l < 0 && stats !== null ? stats.layerCount : l)
-  const layerLabel = stats === null ? '' : maxLayer < 0 ? `All ${stats.layerCount} layers` : `Layer ${maxLayer} / ${stats.layerCount}`
+  const layerLabel = stats === null ? '' : maxLayer < 0 ? `All ${stats.layerCount} layers` : `Layer ${maxLayer} of ${stats.layerCount}`
 
   return (
     <>
       <ScrollView
-        className="bg-gray-100 dark:bg-black"
-        contentContainerClassName="p-4 gap-4 pb-16"
+        className="bg-gray-50 dark:bg-black"
+        contentContainerClassName="px-4 pt-2 pb-24"
         contentInsetAdjustmentBehavior="automatic"
       >
         {vendors.length === 0 ? (
-          <Card>
-            <Text className="text-base font-semibold text-black dark:text-white">No printer profiles yet</Text>
-            <Text className="text-base text-gray-600 dark:text-gray-300">
-              Install at least one vendor bundle to start slicing.
-            </Text>
-            <Link href="/vendors" asChild>
-              <Button title="Install profiles" fullWidth />
-            </Link>
+          <Card className="mb-4">
+            <View className="items-start gap-2">
+              <Text className="text-[17px] font-semibold text-black dark:text-white">Start with a printer bundle</Text>
+              <Text className="text-[15px] text-gray-600 dark:text-gray-300">
+                Install profiles for your printer's manufacturer to unlock slicing.
+              </Text>
+              <Link href="/vendors" asChild>
+                <Button title="Browse printer profiles" fullWidth />
+              </Link>
+            </View>
           </Card>
         ) : null}
 
         {presetError !== '' ? (
-          <Card>
-            <Text className="text-base text-red-500">{presetError}</Text>
+          <Card className="mb-4">
+            <Text className="text-[15px] leading-5 text-red-500" numberOfLines={4}>
+              {presetError}
+            </Text>
             <Link href="/vendors" asChild>
-              <Button title="Manage profiles" variant="secondary" fullWidth />
+              <Button title="Reinstall profiles" variant="secondary" fullWidth />
             </Link>
           </Card>
         ) : null}
 
-        <View className="gap-2">
-          <View className="h-80 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <View className="mb-6 gap-3">
+          <View className="h-[360px] overflow-hidden rounded-3xl bg-white dark:bg-neutral-900">
             <OrcaViewport
               style={{ flex: 1 }}
               sessionId={session.id}
@@ -245,14 +249,14 @@ export default function HomeScreen(): React.JSX.Element {
             onChange={setViewMode}
           />
           {viewMode === 'preview' && stats !== null ? (
-            <View className="flex-row items-center gap-2 pt-1">
+            <View className="flex-row items-center gap-3 pt-1">
               <Button
                 title="−"
                 variant="secondary"
                 onPress={() => setMaxLayer((l) => Math.max(0, stepValid(l) - 1))}
                 disabled={stepValid(maxLayer) <= 0}
               />
-              <Text className="flex-1 text-center text-base text-gray-600 dark:text-gray-300">{layerLabel}</Text>
+              <Text className="flex-1 text-center text-[15px] text-gray-700 dark:text-gray-300">{layerLabel}</Text>
               <Button
                 title="+"
                 variant="secondary"
@@ -263,8 +267,8 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </View>
 
-        <Card title="Presets">
-          {PRESET_KINDS.map(({ kind, label }) => (
+        <Card className="mb-6" title="Presets" padded={false}>
+          {PRESET_KINDS.map(({ kind, label }, i) => (
             <PresetRow
               key={kind}
               label={label}
@@ -272,40 +276,49 @@ export default function HomeScreen(): React.JSX.Element {
               disabled={busy}
               onPickPress={() => openPicker(kind)}
               editHref={{ pathname: '/settings/[kind]', params: { kind } }}
+              last={i === PRESET_KINDS.length - 1}
             />
           ))}
         </Card>
 
-        <Card title="Objects">
+        <Card
+          className="mb-6"
+          title="Plate"
+          subtitle={objects.length === 0 ? 'Nothing on the plate yet' : `${objects.length} object${objects.length === 1 ? '' : 's'}`}
+          padded={false}
+        >
           {objects.length === 0 ? (
-            <Text className="text-base text-gray-500 dark:text-gray-400">Nothing on the plate yet.</Text>
+            <Row last>
+              <Text className="text-[15px] text-gray-500 dark:text-gray-400">
+                Import an STL, OBJ, 3MF or STEP file to get started.
+              </Text>
+            </Row>
           ) : (
-            objects.map((o) => (
-              <View
-                key={o.id}
-                className="flex-row items-center gap-2 border-b border-gray-200 py-1 dark:border-neutral-800"
-              >
-                <View className="flex-1">
-                  <Text className="text-base text-black dark:text-white" numberOfLines={1}>
-                    {o.name}
-                  </Text>
-                  <Text className="text-[13px] text-gray-500 dark:text-gray-400">
-                    {o.size.x.toFixed(1)} × {o.size.y.toFixed(1)} × {o.size.z.toFixed(1)} mm
-                  </Text>
+            objects.map((o, i) => (
+              <Row key={o.id} last={i === objects.length - 1}>
+                <View className="flex-row items-center gap-3">
+                  <View className="flex-1">
+                    <Text className="text-[15px] text-black dark:text-white" numberOfLines={1}>
+                      {o.name}
+                    </Text>
+                    <Text className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">
+                      {o.size.x.toFixed(1)} × {o.size.y.toFixed(1)} × {o.size.z.toFixed(1)} mm
+                    </Text>
+                  </View>
+                  <Button
+                    title="Remove"
+                    variant="ghost"
+                    onPress={() => {
+                      session.removeObject(o.id)
+                      refresh()
+                    }}
+                    disabled={busy}
+                  />
                 </View>
-                <Button
-                  title="Remove"
-                  variant="ghost"
-                  onPress={() => {
-                    session.removeObject(o.id)
-                    refresh()
-                  }}
-                  disabled={busy}
-                />
-              </View>
+              </Row>
             ))
           )}
-          <View className="flex-row gap-2 mt-1">
+          <View className="flex-row gap-3 border-t border-gray-100 p-4 dark:border-neutral-800">
             <View className="flex-1">
               <Button title="Import model" variant="secondary" onPress={importModel} disabled={busy} fullWidth />
             </View>
@@ -328,20 +341,23 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         </Card>
 
-        <Card title="Slice">
+        <Card className="mb-6" title="Slice">
           {progress !== null ? (
-            <View className="gap-2">
-              <Text className="text-base text-black dark:text-white">
-                {progress.percent}% · {t(progress.message)}
-              </Text>
+            <View className="gap-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[15px] font-medium text-black dark:text-white" numberOfLines={1}>
+                  {t(progress.message)}
+                </Text>
+                <Text className="text-[15px] font-semibold text-blue-500">{progress.percent}%</Text>
+              </View>
               <ProgressBar percent={progress.percent} />
-              <Button title="Cancel" variant="ghost" onPress={() => session.cancel()} />
+              <Button title="Cancel" variant="ghost" onPress={() => session.cancel()} fullWidth />
             </View>
           ) : (
-            <Button title="Slice plate" onPress={slice} disabled={!canSlice} fullWidth />
+            <Button title="Slice plate" size="lg" onPress={slice} disabled={!canSlice} fullWidth />
           )}
           {result !== null && result.outcome !== 'finished' ? (
-            <Text className="text-base text-red-500">
+            <Text className="text-[15px] text-red-500">
               {result.outcome === 'cancelled' ? 'Cancelled' : result.error}
             </Text>
           ) : null}
@@ -351,32 +367,19 @@ export default function HomeScreen(): React.JSX.Element {
             </Text>
           ))}
           {stats !== null ? (
-            <View className="gap-2 pt-1">
+            <View className="gap-3">
               <View className="flex-row gap-3">
-                <Stat label="Print time" value={formatDuration(stats.printTimeSeconds)} />
-                <Stat label="Filament" value={`${stats.filamentGrams.toFixed(1)} g`} />
-                <Stat label="Layers" value={String(stats.layerCount)} />
+                <StatTile label="Print time" value={formatDuration(stats.printTimeSeconds)} />
+                <StatTile label="Filament" value={`${stats.filamentGrams.toFixed(1)} g`} />
+                <StatTile label="Layers" value={String(stats.layerCount)} />
               </View>
-              <Button
-                title="Share G-code"
-                variant="secondary"
-                onPress={share}
-                disabled={gcodePath === null}
-                fullWidth
-              />
-              <View className="flex-row gap-2">
+              <View className="flex-row gap-3">
                 <View className="flex-1">
-                  <Button
-                    title="Upload"
-                    variant="secondary"
-                    onPress={() => send(false)}
-                    disabled={gcodePath === null || sending}
-                    fullWidth
-                  />
+                  <Button title="Share G-code" variant="secondary" onPress={share} disabled={gcodePath === null} fullWidth />
                 </View>
                 <View className="flex-1">
                   <Button
-                    title="Upload & print"
+                    title="Send to printer"
                     onPress={() => send(true)}
                     disabled={gcodePath === null || sending}
                     fullWidth
@@ -387,33 +390,26 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </Card>
 
-        <Card title="Printers">
-          <Text className="text-base text-gray-600 dark:text-gray-300">
-            {printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(', ')}
-          </Text>
-          <View className="flex-row gap-2">
-            <View className="flex-1">
-              <Link href="/printers" asChild>
-                <Button title="Manage printers" variant="secondary" fullWidth />
-              </Link>
-            </View>
-            <View className="flex-1">
-              <Link href="/vendors" asChild>
-                <Button title="Printer profiles" variant="secondary" fullWidth />
-              </Link>
-            </View>
-          </View>
+        <Card className="mb-6" title="Printers" subtitle={printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(' · ')} padded={false}>
+          <Row>
+            <Link href="/printers" asChild>
+              <Button title="Manage printers" variant="ghost" fullWidth />
+            </Link>
+          </Row>
+          <Row last>
+            <Link href="/vendors" asChild>
+              <Button title="Printer profiles" variant="ghost" fullWidth />
+            </Link>
+          </Row>
         </Card>
 
-        <Text className="text-center text-[13px] text-gray-500 dark:text-gray-400">Core {version}</Text>
+        <Text className="text-center text-[12px] text-gray-400 dark:text-gray-600">OrcaCore {version}</Text>
       </ScrollView>
 
       {pickerKind !== null ? (
         <PresetPicker
           kind={pickerKind}
-          title={
-            pickerKind === 'printer' ? 'Choose a printer' : pickerKind === 'filament' ? 'Choose a filament' : 'Choose a process'
-          }
+          title={pickerKind === 'printer' ? 'Choose a printer' : pickerKind === 'filament' ? 'Choose a filament' : 'Choose a process'}
           presets={pickerPresets}
           selected={selected[pickerKind]}
           visible
@@ -425,11 +421,13 @@ export default function HomeScreen(): React.JSX.Element {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
+function StatTile({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
-    <View className="flex-1">
-      <Text className="text-[13px] text-gray-500 dark:text-gray-400">{label}</Text>
-      <Text className="text-base font-semibold text-black dark:text-white">{value}</Text>
+    <View className="flex-1 rounded-xl bg-gray-100 px-3 py-3 dark:bg-neutral-800">
+      <Text className="text-[12px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{label}</Text>
+      <Text className="mt-1 text-[17px] font-semibold text-black dark:text-white" numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   )
 }

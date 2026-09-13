@@ -2,27 +2,26 @@ import React, { forwardRef } from 'react'
 import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive'
+type Size = 'md' | 'lg'
 
-// The remaining Pressable props pass through. Typed as an intersection rather
-// than a string index signature: forwardRef's PropsWithoutRef turns a type
-// with an index signature into one where every named prop is unknown.
 type Props = Omit<PressableProps, 'style' | 'className'> & {
   title: string
   variant?: Variant
+  size?: Size
   loading?: boolean
   fullWidth?: boolean
   className?: string
 }
 
-// Variant-driven class sets. Using strings so NativeWind can pre-compile them
-// at build time; a runtime template would trip the JIT-safe extractor.
-const containerBase =
-  'min-h-[44px] items-center justify-center rounded-xl px-3 py-3'
+const sizeContainer: Record<Size, string> = {
+  md: 'min-h-[44px] px-4 py-2.5',
+  lg: 'min-h-[52px] px-5 py-3.5',
+}
 const variantContainer: Record<Variant, string> = {
-  primary: 'bg-blue-500 active:opacity-80',
-  secondary: 'bg-gray-200 dark:bg-neutral-800 active:opacity-80',
-  ghost: 'bg-transparent active:opacity-60',
-  destructive: 'bg-red-500 active:opacity-80',
+  primary: 'bg-blue-500 active:bg-blue-600',
+  secondary: 'bg-gray-100 active:bg-gray-200 dark:bg-neutral-800 dark:active:bg-neutral-700',
+  ghost: 'bg-transparent active:bg-gray-100 dark:active:bg-neutral-800',
+  destructive: 'bg-red-500 active:bg-red-600',
 }
 const variantText: Record<Variant, string> = {
   primary: 'text-white',
@@ -30,14 +29,29 @@ const variantText: Record<Variant, string> = {
   ghost: 'text-blue-500',
   destructive: 'text-white',
 }
+const sizeText: Record<Size, string> = {
+  md: 'text-[15px] font-semibold',
+  lg: 'text-[17px] font-semibold',
+}
 
 export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(function Button(
-  { title, onPress, variant = 'primary', disabled = false, loading = false, fullWidth = false, className, ...rest },
+  {
+    title,
+    onPress,
+    variant = 'primary',
+    size = 'md',
+    disabled = false,
+    loading = false,
+    fullWidth = false,
+    className,
+    ...rest
+  },
   ref,
 ) {
   const isDisabled = disabled || loading
   const classes = [
-    containerBase,
+    'items-center justify-center rounded-xl',
+    sizeContainer[size],
     variantContainer[variant],
     fullWidth ? 'self-stretch' : 'self-start',
     isDisabled ? 'opacity-40' : '',
@@ -57,7 +71,7 @@ export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(fu
       {loading ? (
         <ActivityIndicator color={variant === 'primary' || variant === 'destructive' ? '#ffffff' : '#0a84ff'} />
       ) : (
-        <Text className={`text-base font-semibold ${variantText[variant]}`}>{title}</Text>
+        <Text className={`${sizeText[size]} ${variantText[variant]}`}>{title}</Text>
       )}
     </Pressable>
   )

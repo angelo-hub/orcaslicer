@@ -143,7 +143,10 @@ public:
 
     // Presets. load_presets() reads the vendor profiles from the resources directory and
     // the user presets from the data directory; returns an error text or an empty string.
+    // reload_presets() first wipes data/system so a same-version reinstall of the resources
+    // (e.g. after the app removed and re-fetched a vendor) really refreshes the mirror.
     std::string              load_presets();
+    std::string              reload_presets();
     std::vector<PresetInfo>  presets(PresetKind kind) const;
     std::string              selected_preset(PresetKind kind) const;
     // Select by name. Filaments are per extruder; select_preset selects extruder 0.

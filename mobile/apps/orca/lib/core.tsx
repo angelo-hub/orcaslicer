@@ -46,7 +46,11 @@ export function CoreProvider({ children }: { children: React.ReactNode }): React
       ready,
       reloadPresets: async () => {
         if (session === null) return
-        setPresetError(await session.loadPresets())
+        // reloadPresets wipes data/system before rereading so a fresh
+        // vendor install (or a reinstall over a corrupt file) really
+        // takes effect, unlike loadPresets which skips a same-version
+        // reinstall and leaves the mirror as-is.
+        setPresetError(await session.reloadPresets())
       },
     }),
     [core, session, presetError, ready]

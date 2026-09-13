@@ -18,6 +18,7 @@ namespace margelo::nitro::orca {
       prototype.registerHybridGetter("isSliced", &HybridOrcaSessionSpec::getIsSliced);
       prototype.registerHybridGetter("isBusy", &HybridOrcaSessionSpec::getIsBusy);
       prototype.registerHybridMethod("loadPresets", &HybridOrcaSessionSpec::loadPresets);
+      prototype.registerHybridMethod("reloadPresets", &HybridOrcaSessionSpec::reloadPresets);
       prototype.registerHybridMethod("presets", &HybridOrcaSessionSpec::presets);
       prototype.registerHybridMethod("selectedPreset", &HybridOrcaSessionSpec::selectedPreset);
       prototype.registerHybridMethod("selectPreset", &HybridOrcaSessionSpec::selectPreset);

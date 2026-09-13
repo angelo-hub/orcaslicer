@@ -120,6 +120,13 @@ std::shared_ptr<Promise<std::string>> HybridOrcaSession::loadPresets() {
   });
 }
 
+std::shared_ptr<Promise<std::string>> HybridOrcaSession::reloadPresets() {
+  return Promise<std::string>::async([this]() -> std::string {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _session.reload_presets();
+  });
+}
+
 std::vector<PresetInfo> HybridOrcaSession::presets(PresetKind kind) {
   auto lock = lockNow();
   return toJS(_session.presets(toCore(kind)));

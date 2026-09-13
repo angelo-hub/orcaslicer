@@ -77,6 +77,7 @@ namespace margelo::nitro::orca {
     public:
       // Methods
       virtual std::shared_ptr<Promise<std::string>> loadPresets() = 0;
+      virtual std::shared_ptr<Promise<std::string>> reloadPresets() = 0;
       virtual std::vector<PresetInfo> presets(PresetKind kind) = 0;
       virtual std::string selectedPreset(PresetKind kind) = 0;
       virtual bool selectPreset(PresetKind kind, const std::string& name) = 0;
