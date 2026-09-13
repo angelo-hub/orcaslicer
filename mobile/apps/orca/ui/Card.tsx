@@ -82,8 +82,8 @@ export function Card({
 
   return (
     <Animated.View
-      layout={LinearTransition.springify().damping(20)}
-      entering={FadeInDown.duration(320).delay(index * 60).springify().damping(18)}
+      layout={LinearTransition.duration(220)}
+      entering={FadeInDown.duration(260).delay(index * 40)}
       className={className}
     >
       {hasHeader ? (
@@ -97,7 +97,7 @@ export function Card({
       ) : null}
       {!collapsed ? (
         <Animated.View
-          layout={LinearTransition.springify().damping(20)}
+          layout={LinearTransition.duration(200)}
           className={`overflow-hidden rounded-3xl bg-white shadow-soft dark:bg-neutral-900 ${padded ? 'gap-3 p-4' : ''}`}
         >
           {children}

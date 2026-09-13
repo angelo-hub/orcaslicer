@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker'
 import { File, Paths } from 'expo-file-system'
-import { Link } from 'expo-router'
+import { Link, useRouter } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import React, { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native'
@@ -42,6 +42,7 @@ function offendingVendorIn(error: string): string | null {
 }
 
 export default function HomeScreen(): React.JSX.Element {
+  const router = useRouter()
   const { version, session, presetError, ready, reloadPresets } = useCore()
   const [removing, setRemoving] = useState(false)
   const [objects, setObjects] = useState<ObjectInfo[]>([])
@@ -543,23 +544,26 @@ export default function HomeScreen(): React.JSX.Element {
           subtitle={printers.length === 0 ? 'None configured' : `${printers.length} configured`}
           padded={false}
         >
-          {printers.map((p, i) => (
-            <Link key={p.id} href={{ pathname: '/host/[id]', params: { id: p.id } }} asChild>
-              <Row last={i === printers.length - 1 && printers.length > 0}>
-                <View className="flex-row items-center gap-3">
-                  <View className="flex-1">
-                    <Text className="text-[15px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={1}>
-                      {p.name}
-                    </Text>
-                    <Text className="mt-0.5 text-[12px] text-neutral-500 dark:text-neutral-400" numberOfLines={1}>
-                      {p.url}
-                    </Text>
-                  </View>
-                  <Text className="text-[20px] leading-5 text-neutral-300 dark:text-neutral-600">›</Text>
+          {printers.map((p, i) => {
+            const last = i === printers.length - 1
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => router.push({ pathname: '/host/[id]', params: { id: p.id } })}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-neutral-100 dark:active:bg-neutral-800 ${last ? '' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+              >
+                <View className="flex-1">
+                  <Text className="text-[15px] font-medium text-neutral-900 dark:text-neutral-100" numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-neutral-500 dark:text-neutral-400" numberOfLines={1}>
+                    {p.url}
+                  </Text>
                 </View>
-              </Row>
-            </Link>
-          ))}
+                <Text className="text-[20px] leading-5 text-neutral-300 dark:text-neutral-600">›</Text>
+              </Pressable>
+            )
+          })}
           <View className="flex-row gap-2 border-t border-neutral-100 p-4 dark:border-neutral-800">
             <View className="flex-1">
               <Link href="/printers" asChild>
@@ -579,24 +583,26 @@ export default function HomeScreen(): React.JSX.Element {
         </Text>
       </ScrollView>
 
-      <FullscreenViewport
-        visible={fullscreen}
-        onClose={() => setFullscreen(false)}
-        sessionId={session.id}
-        mode={viewMode}
-        maxLayer={maxLayer}
-        showTravels={false}
-        revision={revision}
-      >
-        <SegmentedControl
-          value={viewMode}
-          options={[
-            { value: 'scene', label: 'Objects' },
-            { value: 'preview', label: 'Preview', disabled: stats === null },
-          ]}
-          onChange={setViewMode}
-        />
-      </FullscreenViewport>
+      {fullscreen ? (
+        <FullscreenViewport
+          visible
+          onClose={() => setFullscreen(false)}
+          sessionId={session.id}
+          mode={viewMode}
+          maxLayer={maxLayer}
+          showTravels={false}
+          revision={revision}
+        >
+          <SegmentedControl
+            value={viewMode}
+            options={[
+              { value: 'scene', label: 'Objects' },
+              { value: 'preview', label: 'Preview', disabled: stats === null },
+            ]}
+            onChange={setViewMode}
+          />
+        </FullscreenViewport>
+      ) : null}
 
       {pickerKind !== null ? (
         <PresetPicker
