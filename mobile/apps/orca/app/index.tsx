@@ -16,7 +16,7 @@ import { SegmentedControl } from '@/ui/SegmentedControl'
 import { useCore } from '@/lib/core'
 import { t } from '@/lib/i18n'
 import { clientFor, loadPrinters, type PrinterHost } from '@/lib/printers'
-import { installedVendors, nativePath } from '@/lib/profiles'
+import { installedVendors, nativePath, removeVendor } from '@/lib/profiles'
 
 const PRESET_KINDS: Array<{ kind: PresetKind; label: string }> = [
   { kind: 'printer', label: 'Printer' },
@@ -30,8 +30,16 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`
 }
 
+// The core surfaces preset errors as one long string that often names the
+// offending vendor ("Found duplicated settings in vendor Qidi's json file
+// lists: …"). Pull that name out so the alert can offer a one-tap fix.
+function offendingVendorIn(error: string): string | null {
+  const match = /vendor\s+([A-Za-z0-9][A-Za-z0-9 _-]*?)['`’]s\b/.exec(error)
+  return match !== null && match[1] !== undefined ? match[1].trim() : null
+}
+
 export default function HomeScreen(): React.JSX.Element {
-  const { version, session, presetError, ready } = useCore()
+  const { version, session, presetError, ready, reloadPresets } = useCore()
   const [objects, setObjects] = useState<ObjectInfo[]>([])
   const [selected, setSelected] = useState<Record<PresetKind, string>>({ printer: '', filament: '', process: '' })
   const [progress, setProgress] = useState<{ percent: number; message: string } | null>(null)
@@ -236,10 +244,27 @@ export default function HomeScreen(): React.JSX.Element {
             <InlineAlert
               tone="critical"
               title="Profile load failed"
+              clampLines={4}
               action={
-                <Link href="/vendors" asChild>
-                  <Button title="Reinstall profiles" variant="secondary" fullWidth />
-                </Link>
+                <View className="flex-row gap-2">
+                  {(() => {
+                    const bad = offendingVendorIn(presetError)
+                    if (bad === null) return null
+                    return (
+                      <Button
+                        title={`Remove ${bad}`}
+                        variant="destructive"
+                        onPress={() => {
+                          removeVendor(bad)
+                          void reloadPresets()
+                        }}
+                      />
+                    )
+                  })()}
+                  <Link href="/vendors" asChild>
+                    <Button title="Change printer" variant="secondary" />
+                  </Link>
+                </View>
               }
             >
               {presetError}

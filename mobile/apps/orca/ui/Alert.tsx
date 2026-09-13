@@ -1,5 +1,5 @@
-import React from 'react'
-import { Text, View } from 'react-native'
+import React, { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 
 type Tone = 'info' | 'warning' | 'critical' | 'success'
 
@@ -8,12 +8,11 @@ type Props = {
   title?: string
   children: React.ReactNode
   action?: React.ReactNode
+  /** Collapse a long string body to this many lines with a "Show all" toggle. Ignored for non-string children. */
+  clampLines?: number
   className?: string
 }
 
-// Tone-driven class sets kept as strings so NativeWind can pre-compile them.
-// The container reads as an inset banner: soft tint, matching hairline, no
-// heavy shadow — meant to sit inside a Card without competing with it.
 const container: Record<Tone, string> = {
   info: 'bg-blue-50 dark:bg-blue-500/10',
   warning: 'bg-amber-50 dark:bg-amber-500/10',
@@ -45,21 +44,43 @@ const label: Record<Tone, string> = {
   success: 'Done',
 }
 
-export function Alert({ tone = 'info', title, children, action, className }: Props): React.JSX.Element {
+export function Alert({
+  tone = 'info',
+  title,
+  children,
+  action,
+  clampLines = 4,
+  className,
+}: Props): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const isString = typeof children === 'string'
+  const willClamp = isString && !expanded && clampLines > 0
   return (
-    <View className={`overflow-hidden rounded-xl ${container[tone]} ${className ?? ''}`}>
+    <View className={`overflow-hidden rounded-2xl ${container[tone]} ${className ?? ''}`}>
       <View className="flex-row">
         <View className={`w-1 ${bar[tone]}`} />
         <View className="flex-1 gap-1 p-3">
-          <Text className={`text-[13px] font-semibold uppercase tracking-wider ${titleColor[tone]}`}>
+          <Text className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${titleColor[tone]}`}>
             {title ?? label[tone]}
           </Text>
-          {typeof children === 'string' ? (
-            <Text className={`text-[14px] leading-5 ${bodyColor[tone]}`}>{children}</Text>
+          {isString ? (
+            <>
+              <Text
+                className={`text-[13px] leading-5 ${bodyColor[tone]}`}
+                numberOfLines={willClamp ? clampLines : undefined}
+              >
+                {children}
+              </Text>
+              <Pressable onPress={() => setExpanded((e) => !e)} hitSlop={6}>
+                <Text className={`pt-1 text-[12px] font-semibold ${titleColor[tone]}`}>
+                  {expanded ? 'Show less' : 'Show all'}
+                </Text>
+              </Pressable>
+            </>
           ) : (
             children
           )}
-          {action !== undefined ? <View className="pt-1">{action}</View> : null}
+          {action !== undefined ? <View className="pt-2">{action}</View> : null}
         </View>
       </View>
     </View>
