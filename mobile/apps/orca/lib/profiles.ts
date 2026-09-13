@@ -114,6 +114,41 @@ export async function availableVendors(source: ProfileSource = DEFAULT_PROFILE_S
     .sort()
 }
 
+/** A printer available at the source, keyed by the vendor bundle that owns it. */
+export interface AvailablePrinter {
+  vendor: string
+  vendorName: string
+  model: string
+}
+
+/**
+ * List every printer offered across every vendor bundle. Reads each vendor's
+ * top-level manifest for its machine_model_list; one small HTTP fetch per
+ * vendor, results cached by the caller. Empty or bad manifests are skipped.
+ */
+export async function availablePrinters(source: ProfileSource = DEFAULT_PROFILE_SOURCE): Promise<AvailablePrinter[]> {
+  const vendors = await availableVendors(source)
+  const results = await Promise.all(
+    vendors.map(async (vendor) => {
+      try {
+        const url = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${source.ref}/resources/profiles/${encodeURIComponent(vendor)}.json`
+        const response = await fetch(url)
+        if (!response.ok) return [] as AvailablePrinter[]
+        const manifest = (await response.json()) as { name?: string; machine_model_list?: Array<{ name?: string }> }
+        const models = manifest.machine_model_list ?? []
+        const vendorName = manifest.name ?? vendor
+        return models
+          .map((m) => m.name)
+          .filter((n): n is string => typeof n === 'string' && n.length > 0)
+          .map((model) => ({ vendor, vendorName, model }))
+      } catch {
+        return [] as AvailablePrinter[]
+      }
+    }),
+  )
+  return results.flat().sort((a, b) => a.model.localeCompare(b.model))
+}
+
 /**
  * Downloads a vendor's index file and its profile folder. Roughly one API call per
  * subfolder plus one download per file; a vendor is 1 to 10 MB.

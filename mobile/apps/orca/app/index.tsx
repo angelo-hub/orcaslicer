@@ -194,29 +194,41 @@ export default function HomeScreen(): React.JSX.Element {
   }
 
   const vendors = installedVendors()
-  const canSlice = objects.length > 0 && vendors.length > 0 && selected.printer !== ''
+  // A preset is "chosen" only if it points at a real system/user profile;
+  // the built-in "Default Printer" / "Default Filament" / "Default Setting"
+  // fallbacks are placeholders that fail validation the moment you slice.
+  const isDefaultPreset = (name: string) => name === '' || name.startsWith('Default ')
+  const hasRealPrinter = !isDefaultPreset(selected.printer)
+  const canSlice = objects.length > 0 && hasRealPrinter
   const stepValid = (l: number) => (l < 0 && stats !== null ? stats.layerCount : l)
   const layerLabel = stats === null ? '' : maxLayer < 0 ? `All ${stats.layerCount} layers` : `Layer ${maxLayer} of ${stats.layerCount}`
 
   return (
     <>
       <ScrollView
-        className="bg-gray-50 dark:bg-black"
+        className="bg-neutral-50 dark:bg-neutral-950"
         contentContainerClassName="px-4 pt-2 pb-24"
         contentInsetAdjustmentBehavior="automatic"
       >
-        {vendors.length === 0 ? (
-          <Card className="mb-4">
-            <View className="items-start gap-2">
-              <Text className="text-[17px] font-semibold text-black dark:text-white">Start with a printer bundle</Text>
-              <Text className="text-[15px] text-gray-600 dark:text-gray-300">
-                Install profiles for your printer's manufacturer to unlock slicing.
-              </Text>
-              <Link href="/vendors" asChild>
-                <Button title="Browse printer profiles" fullWidth />
-              </Link>
-            </View>
-          </Card>
+        {!hasRealPrinter ? (
+          <View className="mb-4">
+            <Card padded>
+              <View className="items-start gap-3">
+                <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-accent-600">
+                  Get set up
+                </Text>
+                <Text className="text-[22px] font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  Pick your printer to start slicing
+                </Text>
+                <Text className="text-[15px] leading-5 text-neutral-500 dark:text-neutral-400">
+                  Browse every printer OrcaSlicer knows about. The right filament and process presets install with it.
+                </Text>
+                <Link href="/vendors" asChild>
+                  <Button title="Choose a printer" size="lg" fullWidth />
+                </Link>
+              </View>
+            </Card>
+          </View>
         ) : null}
 
         {presetError !== '' ? (
@@ -236,7 +248,7 @@ export default function HomeScreen(): React.JSX.Element {
         ) : null}
 
         <View className="mb-6 gap-3">
-          <View className="h-[360px] overflow-hidden rounded-3xl bg-white dark:bg-neutral-900">
+          <View className="h-[360px] overflow-hidden rounded-3xl bg-white shadow-soft dark:bg-neutral-900">
             <OrcaViewport
               style={{ flex: 1 }}
               sessionId={session.id}
@@ -262,7 +274,9 @@ export default function HomeScreen(): React.JSX.Element {
                 onPress={() => setMaxLayer((l) => Math.max(0, stepValid(l) - 1))}
                 disabled={stepValid(maxLayer) <= 0}
               />
-              <Text className="flex-1 text-center text-[15px] text-gray-700 dark:text-gray-300">{layerLabel}</Text>
+              <Text className="flex-1 text-center text-[15px] text-neutral-700 dark:text-neutral-300">
+                {layerLabel}
+              </Text>
               <Button
                 title="+"
                 variant="secondary"
@@ -273,7 +287,7 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </View>
 
-        <Card className="mb-6" title="Presets" padded={false}>
+        <Card className="mb-6" title="Presets" padded={false} index={0}>
           {PRESET_KINDS.map(({ kind, label }, i) => (
             <PresetRow
               key={kind}
@@ -289,6 +303,7 @@ export default function HomeScreen(): React.JSX.Element {
 
         <Card
           className="mb-6"
+          index={1}
           title="Plate"
           subtitle={objects.length === 0 ? 'Nothing on the plate yet' : `${objects.length} object${objects.length === 1 ? '' : 's'}`}
           padded={false}
@@ -347,7 +362,7 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         </Card>
 
-        <Card className="mb-6" title="Slice">
+        <Card className="mb-6" title="Slice" index={2}>
           {progress !== null ? (
             <View className="gap-3">
               <View className="flex-row items-center justify-between">
@@ -417,20 +432,28 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </Card>
 
-        <Card className="mb-6" title="Printers" subtitle={printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(' · ')} padded={false}>
+        <Card
+          className="mb-6"
+          index={3}
+          title="Destinations"
+          subtitle={printers.length === 0 ? 'None configured' : printers.map((p) => p.name).join(' · ')}
+          padded={false}
+        >
           <Row>
             <Link href="/printers" asChild>
-              <Button title="Manage printers" variant="ghost" fullWidth />
+              <Button title="Manage destinations" variant="ghost" fullWidth />
             </Link>
           </Row>
           <Row last>
             <Link href="/vendors" asChild>
-              <Button title="Printer profiles" variant="ghost" fullWidth />
+              <Button title="Change printer" variant="ghost" fullWidth />
             </Link>
           </Row>
         </Card>
 
-        <Text className="text-center text-[12px] text-gray-400 dark:text-gray-600">OrcaCore {version}</Text>
+        <Text className="text-center text-[11px] uppercase tracking-widest text-neutral-400 dark:text-neutral-600">
+          OrcaCore {version}
+        </Text>
       </ScrollView>
 
       {pickerKind !== null ? (

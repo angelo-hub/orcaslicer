@@ -13,25 +13,28 @@ type Props = Omit<PressableProps, 'style' | 'className'> & {
   className?: string
 }
 
+// Dark-neutral primary + quiet secondary. Moves the app off the default iOS
+// blue-500 fill everywhere. The active states shift a shade rather than fade
+// so a Pressable feels tactile without any bespoke animation.
 const sizeContainer: Record<Size, string> = {
-  md: 'min-h-[44px] px-4 py-2.5',
+  md: 'min-h-[42px] px-4 py-2.5',
   lg: 'min-h-[52px] px-5 py-3.5',
 }
 const variantContainer: Record<Variant, string> = {
-  primary: 'bg-blue-500 active:bg-blue-600',
-  secondary: 'bg-gray-100 active:bg-gray-200 dark:bg-neutral-800 dark:active:bg-neutral-700',
-  ghost: 'bg-transparent active:bg-gray-100 dark:active:bg-neutral-800',
-  destructive: 'bg-red-500 active:bg-red-600',
+  primary: 'bg-neutral-950 active:bg-neutral-800 dark:bg-white dark:active:bg-neutral-200',
+  secondary: 'bg-neutral-100 active:bg-neutral-200 dark:bg-neutral-800 dark:active:bg-neutral-700',
+  ghost: 'bg-transparent active:bg-neutral-100 dark:active:bg-neutral-800',
+  destructive: 'bg-red-600 active:bg-red-700',
 }
 const variantText: Record<Variant, string> = {
-  primary: 'text-white',
-  secondary: 'text-blue-500',
-  ghost: 'text-blue-500',
+  primary: 'text-white dark:text-neutral-950',
+  secondary: 'text-neutral-900 dark:text-neutral-100',
+  ghost: 'text-neutral-900 dark:text-neutral-100',
   destructive: 'text-white',
 }
 const sizeText: Record<Size, string> = {
-  md: 'text-[15px] font-semibold',
-  lg: 'text-[17px] font-semibold',
+  md: 'text-[15px] font-semibold tracking-tight',
+  lg: 'text-[17px] font-semibold tracking-tight',
 }
 
 export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(function Button(
@@ -50,7 +53,7 @@ export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(fu
 ) {
   const isDisabled = disabled || loading
   const classes = [
-    'items-center justify-center rounded-xl',
+    'items-center justify-center rounded-2xl',
     sizeContainer[size],
     variantContainer[variant],
     fullWidth ? 'self-stretch' : 'self-start',
@@ -69,7 +72,7 @@ export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(fu
       className={classes}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' || variant === 'destructive' ? '#ffffff' : '#0a84ff'} />
+        <ActivityIndicator color={variant === 'primary' || variant === 'destructive' ? '#ffffff' : '#0a0a0a'} />
       ) : (
         <Text className={`${sizeText[size]} ${variantText[variant]}`}>{title}</Text>
       )}

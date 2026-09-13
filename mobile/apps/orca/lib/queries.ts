@@ -21,6 +21,7 @@ export const queryClient = new QueryClient({
 // anywhere (e.g. after installing a vendor).
 export const queryKeys = {
   availableVendors: ['profiles', 'available'] as const,
+  availablePrinters: ['profiles', 'printers'] as const,
   installedVendors: ['profiles', 'installed'] as const,
   printerStatus: (id: string) => ['printers', id, 'status'] as const,
 }

@@ -9,11 +9,12 @@ type Props<T extends string> = {
   onChange: (value: T) => void
 }
 
-// A compact iOS-style switch. The selected pill sits on the elevated
-// surface; unselected labels use the muted grouped-list style.
+// Modern iOS-style switch. Sits on a soft neutral track; the selected pill
+// is white in light mode and a lifted neutral in dark, with just enough
+// shadow to read as a switch rather than a toggle.
 export function SegmentedControl<T extends string>({ value, options, onChange }: Props<T>): React.JSX.Element {
   return (
-    <View className="flex-row rounded-lg bg-gray-200/70 p-1 dark:bg-neutral-800">
+    <View className="flex-row rounded-2xl bg-neutral-100 p-1 dark:bg-neutral-800">
       {options.map((opt) => {
         const selected = opt.value === value
         return (
@@ -21,8 +22,8 @@ export function SegmentedControl<T extends string>({ value, options, onChange }:
             key={opt.value}
             onPress={opt.disabled === true || selected ? undefined : () => onChange(opt.value)}
             className={[
-              'flex-1 items-center rounded-md py-1.5',
-              selected ? 'bg-white shadow-sm dark:bg-neutral-600' : 'bg-transparent',
+              'flex-1 items-center rounded-xl py-2',
+              selected ? 'bg-white shadow-soft dark:bg-neutral-600' : 'bg-transparent',
               opt.disabled === true ? 'opacity-40' : '',
             ]
               .join(' ')
@@ -31,8 +32,8 @@ export function SegmentedControl<T extends string>({ value, options, onChange }:
             <Text
               className={
                 selected
-                  ? 'text-[14px] font-semibold text-black dark:text-white'
-                  : 'text-[14px] font-medium text-gray-600 dark:text-gray-300'
+                  ? 'text-[14px] font-semibold tracking-tight text-neutral-950 dark:text-neutral-50'
+                  : 'text-[14px] font-medium text-neutral-500 dark:text-neutral-400'
               }
             >
               {opt.label}
