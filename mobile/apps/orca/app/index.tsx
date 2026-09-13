@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native'
 import { OrcaViewport, type ObjectInfo, type PresetInfo, type PresetKind, type SliceResult, type SliceStatistics, type ViewportMode } from 'react-native-orca-core'
 
+import { Alert as InlineAlert } from '@/ui/Alert'
 import { Button } from '@/ui/Button'
 import { Card, Row } from '@/ui/Card'
 import { PresetPicker } from '@/ui/PresetPicker'
@@ -219,14 +220,19 @@ export default function HomeScreen(): React.JSX.Element {
         ) : null}
 
         {presetError !== '' ? (
-          <Card className="mb-4">
-            <Text className="text-[15px] leading-5 text-red-500" numberOfLines={4}>
+          <View className="mb-4">
+            <InlineAlert
+              tone="critical"
+              title="Profile load failed"
+              action={
+                <Link href="/vendors" asChild>
+                  <Button title="Reinstall profiles" variant="secondary" fullWidth />
+                </Link>
+              }
+            >
               {presetError}
-            </Text>
-            <Link href="/vendors" asChild>
-              <Button title="Reinstall profiles" variant="secondary" fullWidth />
-            </Link>
-          </Card>
+            </InlineAlert>
+          </View>
         ) : null}
 
         <View className="mb-6 gap-3">
@@ -354,18 +360,39 @@ export default function HomeScreen(): React.JSX.Element {
               <Button title="Cancel" variant="ghost" onPress={() => session.cancel()} fullWidth />
             </View>
           ) : (
-            <Button title="Slice plate" size="lg" onPress={slice} disabled={!canSlice} fullWidth />
+            <Button
+              title={stats !== null ? 'Slice again' : 'Slice plate'}
+              size="lg"
+              onPress={slice}
+              disabled={!canSlice}
+              fullWidth
+            />
           )}
+
           {result !== null && result.outcome !== 'finished' ? (
-            <Text className="text-[15px] text-red-500">
-              {result.outcome === 'cancelled' ? 'Cancelled' : result.error}
-            </Text>
+            <InlineAlert tone="critical" title={result.outcome === 'cancelled' ? 'Cancelled' : 'Slicing failed'}>
+              {result.outcome === 'cancelled' ? 'You cancelled the slice.' : result.error}
+            </InlineAlert>
           ) : null}
-          {result?.warnings.map((w, i) => (
-            <Text key={i} className={`text-[13px] ${w.critical ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-              {w.text}
-            </Text>
-          ))}
+
+          {result !== null && result.warnings.length > 0 ? (
+            <InlineAlert
+              tone={result.warnings.some((w) => w.critical) ? 'critical' : 'warning'}
+              title={result.warnings.length === 1 ? '1 slicing warning' : `${result.warnings.length} slicing warnings`}
+            >
+              <View className="gap-1">
+                {result.warnings.map((w, i) => (
+                  <Text
+                    key={i}
+                    className={`text-[13px] leading-5 ${w.critical ? 'text-red-900/80 dark:text-red-100/80' : 'text-amber-900/80 dark:text-amber-100/80'}`}
+                  >
+                    • {w.text}
+                  </Text>
+                ))}
+              </View>
+            </InlineAlert>
+          ) : null}
+
           {stats !== null ? (
             <View className="gap-3">
               <View className="flex-row gap-3">
