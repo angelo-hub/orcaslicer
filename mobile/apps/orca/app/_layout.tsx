@@ -10,6 +10,7 @@ import '../global.css'
 import { CoreProvider } from '@/lib/core'
 import { queryClient } from '@/lib/queries'
 import { mmkvAsyncStorage } from '@/lib/storage'
+import { DownloadsPill } from '@/ui/DownloadsPill'
 
 // The Stack is styled once at the root so every screen inherits the
 // grouped-background look and a large iOS-style title on the home screen.
@@ -44,7 +45,11 @@ export default function RootLayout(): React.JSX.Element {
         >
           <Stack.Screen
             name="index"
-            options={{ title: 'OrcaSlicer', headerLargeTitle: true }}
+            options={{
+              title: 'OrcaSlicer',
+              headerLargeTitle: true,
+              headerRight: () => <DownloadsPill />,
+            }}
           />
           <Stack.Screen name="presets/[kind]" options={{ title: 'Choose preset' }} />
           <Stack.Screen name="settings/[kind]" options={{ title: 'Edit preset' }} />

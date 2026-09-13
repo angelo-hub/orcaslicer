@@ -1,32 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import React, { useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Pressable, SectionList, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Image, SectionList, Text, TextInput, View } from 'react-native'
 
 import { Avatar } from '@/ui/Avatar'
 import { Button } from '@/ui/Button'
 import { useCore } from '@/lib/core'
-import {
-  availablePrinters,
-  DEFAULT_PROFILE_SOURCE,
-  installVendor,
-  installedVendors,
-  removeVendor,
-  type AvailablePrinter,
-} from '@/lib/profiles'
+import { useDownloadsStore } from '@/lib/downloads'
+import { availablePrinters, DEFAULT_PROFILE_SOURCE, installedVendors, type AvailablePrinter } from '@/lib/profiles'
 import { queryKeys } from '@/lib/queries'
 
-// Printer-first browser: users pick the specific printer they own. Installing
-// happens under the hood — we fetch the vendor bundle the picked printer
-// belongs to, then land the user back at the home screen with that printer
-// preset selected.
+// Printer-first browser. Installations run through the shared downloads store,
+// so leaving this screen does not stop the fetch — the in-flight download shows
+// up in the header pill and completes on its own.
 export default function VendorsScreen(): React.JSX.Element {
   const router = useRouter()
   const { reloadPresets, session } = useCore()
-  const client = useQueryClient()
   const [query, setQuery] = useState('')
-  const [busyPrinter, setBusyPrinter] = useState<string | null>(null)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const printers = useQuery({
     queryKey: queryKeys.availablePrinters,
@@ -38,45 +28,19 @@ export default function VendorsScreen(): React.JSX.Element {
     staleTime: Infinity,
   })
 
-  const install = useMutation({
-    mutationFn: async (p: AvailablePrinter) => {
-      setBusyPrinter(`${p.vendor}::${p.model}`)
-      setProgress({ done: 0, total: 0 })
-      const alreadyInstalled = installed.data?.includes(p.vendor) === true
-      if (!alreadyInstalled) {
-        removeVendor(p.vendor)
-        await installVendor(p.vendor, (done, total) => setProgress({ done, total }))
-      }
-      await client.invalidateQueries({ queryKey: queryKeys.installedVendors })
-      await reloadPresets()
-      // Select the picked model as the printer preset. The compat filter will
-      // narrow filaments and processes on the home screen automatically.
-      try {
-        if (session !== null) {
-          const candidates = session.presets('printer')
-          // Prefer the exact model name; the 0.4 nozzle variant if present.
-          const exact = candidates.find((c) => c.name === p.model && c.vendor === p.vendor)
-          const withNozzle = candidates.find(
-            (c) => c.vendor === p.vendor && c.name.startsWith(`${p.model} `),
-          )
-          const pick = exact ?? withNozzle
-          if (pick !== undefined) session.selectPreset('printer', pick.name)
-        }
-      } catch {
-        // Selection is best effort; the user can pick on the home screen.
-      }
-    },
-    onSuccess: () => router.back(),
-    onError: (error, p) => {
-      Alert.alert(`Could not install ${p.model}`, String(error))
-      removeVendor(p.vendor)
-      void client.invalidateQueries({ queryKey: queryKeys.installedVendors })
-    },
-    onSettled: () => {
-      setBusyPrinter(null)
-      setProgress(null)
-    },
-  })
+  const byId = useDownloadsStore((s) => s.byId)
+  const install = useDownloadsStore((s) => s.install)
+  const start = (p: AvailablePrinter): void => {
+    install(p, {
+      session,
+      reloadPresets,
+      onCompleted: () => {
+        // Pop back to home once the install finishes so the user sees the
+        // freshly selected printer without needing to press Back.
+        if (router.canGoBack()) router.back()
+      },
+    })
+  }
 
   const needle = query.trim().toLowerCase()
   const sections = useMemo(() => {
@@ -136,7 +100,8 @@ export default function VendorsScreen(): React.JSX.Element {
           )}
           renderItem={({ item, index, section }) => {
             const id = `${item.vendor}::${item.model}`
-            const isBusy = busyPrinter === id
+            const download = byId[id]
+            const isBusy = download !== undefined && (download.state === 'downloading' || download.state === 'installing')
             const isInstalled = installed.data?.includes(item.vendor) === true
             const first = index === 0
             const last = index === section.data.length - 1
@@ -151,24 +116,24 @@ export default function VendorsScreen(): React.JSX.Element {
                       {item.model}
                     </Text>
                     <Text className="mt-0.5 text-[13px] text-neutral-500 dark:text-neutral-400">
-                      {isInstalled ? 'Installed · tap to select' : `${item.vendorName} · downloads on tap`}
+                      {isBusy
+                        ? download.state === 'installing'
+                          ? 'Installing…'
+                          : download.total > 0
+                            ? `Downloading · ${download.done} / ${download.total}`
+                            : 'Downloading…'
+                        : isInstalled
+                          ? 'Installed · tap to select'
+                          : `${item.vendorName} · downloads on tap`}
                     </Text>
                   </View>
                   {isBusy ? (
-                    <View className="items-end">
-                      <ActivityIndicator />
-                      {progress !== null && progress.total > 0 ? (
-                        <Text className="mt-1 text-[11px] tabular-nums text-neutral-500">
-                          {progress.done} / {progress.total}
-                        </Text>
-                      ) : null}
-                    </View>
+                    <ActivityIndicator />
                   ) : (
                     <Button
                       title={isInstalled ? 'Select' : 'Install'}
                       variant={isInstalled ? 'secondary' : 'primary'}
-                      onPress={() => install.mutate(item)}
-                      disabled={busyPrinter !== null}
+                      onPress={() => start(item)}
                     />
                   )}
                 </View>
