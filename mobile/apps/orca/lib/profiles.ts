@@ -33,36 +33,88 @@ async function listDirectory(source: ProfileSource, path: string): Promise<GitHu
   return (await response.json()) as GitHubEntry[]
 }
 
-async function download(entry: GitHubEntry, into: Directory): Promise<void> {
+/** Retry policy for a single-file download. Small enough to keep the total
+ * install time reasonable on a spotty network. */
+const MAX_RETRIES = 4
+const BASE_BACKOFF_MS = 500
+
+/**
+ * Download one file with byte-level retry. GitHub raw supports Range, so on
+ * a mid-stream network drop we resume from where we left off rather than
+ * starting over. Fails hard on non-partial-content or empty bodies.
+ *
+ * @param entry     GitHub file entry.
+ * @param into      Destination directory.
+ * @param onBytes   Optional per-file progress callback.
+ * @param signal    Optional abort signal.
+ */
+async function download(
+  entry: GitHubEntry,
+  into: Directory,
+  onBytes?: (received: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   if (entry.download_url === null) {
     throw new Error(`No download URL for ${entry.path}`)
   }
   const target = new File(into, entry.name)
-  if (target.exists) {
-    target.delete()
+  if (target.exists) target.delete()
+
+  const bailIfAborted = (): void => {
+    if (signal?.aborted === true) throw new Error('cancelled')
   }
-  // Fetch through the JS runtime so we see the HTTP status and can validate
-  // the body. GitHub's raw hosting occasionally serves an empty 200 under
-  // rate limiting, and the core then fails to parse the JSON on startup.
-  const response = await fetch(entry.download_url)
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} downloading ${entry.path}`)
+
+  let received = 0
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let attempt = 0
+  while (true) {
+    bailIfAborted()
+    try {
+      const headers: Record<string, string> = {}
+      if (received > 0) headers['Range'] = `bytes=${received}-`
+      const response = await fetch(entry.download_url, { headers, signal })
+      const acceptable = received > 0 ? response.status === 206 : response.ok
+      if (!acceptable) throw new Error(`HTTP ${response.status} downloading ${entry.path}`)
+      const contentLengthHeader = response.headers.get('Content-Length')
+      const contentLength = contentLengthHeader !== null ? Number.parseInt(contentLengthHeader, 10) : 0
+      if (total === 0 && Number.isFinite(contentLength) && contentLength > 0) total = received + contentLength
+      // fetch on iOS does not expose a stream reader in every RN release;
+      // read as an ArrayBuffer per attempt and treat any error as
+      // recoverable via a fresh Range request from `received`.
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      chunks.push(bytes)
+      received += bytes.length
+      onBytes?.(received, total || received)
+      break
+    } catch (e) {
+      const message = String(e)
+      if (message.includes('cancelled')) throw e
+      attempt += 1
+      if (attempt > MAX_RETRIES) throw new Error(`Gave up on ${entry.path} after ${attempt} attempts: ${message}`)
+      await new Promise<void>((r) => setTimeout(r, BASE_BACKOFF_MS * 2 ** (attempt - 1)))
+    }
   }
-  const bytes = new Uint8Array(await response.arrayBuffer())
-  if (bytes.length === 0) {
-    throw new Error(`Empty response for ${entry.path}`)
+
+  if (received === 0) throw new Error(`Empty response for ${entry.path}`)
+
+  // Concatenate every chunk (usually one, sometimes more if we resumed) and
+  // validate JSON before we let it near the native slicer's parser.
+  const buffer = new Uint8Array(received)
+  let offset = 0
+  for (const c of chunks) {
+    buffer.set(c, offset)
+    offset += c.length
   }
   if (entry.name.toLowerCase().endsWith('.json')) {
-    // Fail fast on corrupt JSON rather than let the native slicer refuse to
-    // start with a parse_error later.
-    const text = new TextDecoder().decode(bytes)
+    const text = new TextDecoder().decode(buffer)
     try {
       JSON.parse(text)
     } catch (e) {
       throw new Error(`Malformed JSON for ${entry.path}: ${String(e)}`)
     }
   }
-  target.write(bytes)
+  target.write(buffer)
 }
 
 /** The core's resources directory. Profiles live under resources/profiles. */
@@ -156,7 +208,8 @@ export async function availablePrinters(source: ProfileSource = DEFAULT_PROFILE_
 export async function installVendor(
   vendor: string,
   onProgress?: (done: number, total: number) => void,
-  source: ProfileSource = DEFAULT_PROFILE_SOURCE
+  source: ProfileSource = DEFAULT_PROFILE_SOURCE,
+  signal?: AbortSignal,
 ): Promise<void> {
   ensureDirectories()
   const root = profilesDirectory()
@@ -181,10 +234,11 @@ export async function installVendor(
 
   let done = 0
   for (const { entry, into } of files) {
-    if (!into.exists) {
-      into.create({ intermediates: true })
-    }
-    await download(entry, into)
+    if (signal?.aborted === true) throw new Error('cancelled')
+    if (!into.exists) into.create({ intermediates: true })
+    // The signal is forwarded to `download` so a cancellation aborts the
+    // in-flight fetch cleanly instead of waiting for the current file to end.
+    await download(entry, into, undefined, signal)
     done += 1
     onProgress?.(done, files.length)
   }

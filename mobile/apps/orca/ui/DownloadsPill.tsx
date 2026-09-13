@@ -1,5 +1,6 @@
 import React from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
+import { useShallow } from 'zustand/react/shallow'
 
 import { selectActive, useDownloadsStore } from '@/lib/downloads'
 
@@ -8,7 +9,10 @@ import { selectActive, useDownloadsStore } from '@/lib/downloads'
 // the frontmost download. Tapping it belongs to the caller (we ship it as a
 // pure View so it composes into Link asChild if needed).
 export function DownloadsPill(): React.JSX.Element | null {
-  const active = useDownloadsStore(selectActive)
+  // Wrap the array-returning selector so Zustand bails out on shallow-equal
+  // results; without this filter() produces a fresh array every render and
+  // the subscribe → set cycle loops.
+  const active = useDownloadsStore(useShallow(selectActive))
   if (active.length === 0) return null
   const head = active[0]
   if (head === undefined) return null

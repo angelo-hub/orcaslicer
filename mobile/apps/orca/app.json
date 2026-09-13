@@ -12,6 +12,8 @@
       "infoPlist": {
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
+        "UIBackgroundModes": ["processing", "fetch"],
+        "BGTaskSchedulerPermittedIdentifiers": ["orca-downloads-continue"],
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "3D model",
@@ -24,7 +26,12 @@
     "android": {
       "package": "com.orcaslicer.mobile"
     },
-    "plugins": ["expo-router", "./plugins/with-swiftui-core-weak-link"],
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-background-task",
+      "./plugins/with-swiftui-core-weak-link"
+    ],
     "experiments": {
       "typedRoutes": true
     }

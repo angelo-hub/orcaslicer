@@ -2,11 +2,12 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useColorScheme } from 'nativewind'
 
 import '../global.css'
 
+import { ensureBackgroundTaskRegistered } from '@/lib/backgroundTasks'
 import { CoreProvider } from '@/lib/core'
 import { queryClient } from '@/lib/queries'
 import { mmkvAsyncStorage } from '@/lib/storage'
@@ -22,6 +23,9 @@ const persister = createAsyncStoragePersister({ storage: mmkvAsyncStorage, key: 
 export default function RootLayout(): React.JSX.Element {
   const { colorScheme } = useColorScheme()
   const dark = colorScheme === 'dark'
+  useEffect(() => {
+    void ensureBackgroundTaskRegistered()
+  }, [])
   return (
     <PersistQueryClientProvider
       client={queryClient}

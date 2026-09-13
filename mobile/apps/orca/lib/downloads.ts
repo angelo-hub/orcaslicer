@@ -1,6 +1,7 @@
 import type { OrcaSession } from 'react-native-orca-core'
 import { create } from 'zustand'
 
+import { notify } from './notifications'
 import { installVendor, installedVendors, removeVendor, type AvailablePrinter } from './profiles'
 import { queryClient, queryKeys } from './queries'
 
@@ -84,10 +85,12 @@ export const useDownloadsStore = create<StoreState>((set, get) => {
           if (!alreadyInstalled) {
             // Wipe any partial install so a re-run over a bad state starts clean.
             removeVendor(printer.vendor)
-            await installVendor(printer.vendor, (done, total) => {
-              if (abort.signal.aborted) throw new Error('cancelled')
-              setDownload(id, { done, total })
-            })
+            await installVendor(
+              printer.vendor,
+              (done, total) => setDownload(id, { done, total }),
+              undefined,
+              abort.signal,
+            )
           }
           if (abort.signal.aborted) throw new Error('cancelled')
           setDownload(id, { state: 'installing' })
@@ -106,6 +109,7 @@ export const useDownloadsStore = create<StoreState>((set, get) => {
             /* selection is optional */
           }
           setDownload(id, { state: 'done' })
+          void notify(`${printer.model} ready`, `Installed from ${printer.vendorName}. Tap to slice.`)
           ctx.onCompleted?.(get().byId[id] as Download)
         } catch (e) {
           const message = String(e)
