@@ -12,8 +12,6 @@ type Props = {
   revision: number
   visible: boolean
   onClose: () => void
-  /** Optional overlay controls (segmented mode, layer scrubber…). Kept minimal on purpose so the plate is the focus. */
-  children?: React.ReactNode
 }
 
 // Full-screen Modal that hosts the same native OrcaViewport as the home screen
@@ -29,7 +27,6 @@ export function FullscreenViewport({
   revision,
   visible,
   onClose,
-  children,
 }: Props): React.JSX.Element {
   useEffect(() => {
     if (!visible) return
@@ -70,9 +67,11 @@ export function FullscreenViewport({
         >
           <Text className="text-[13px] font-semibold uppercase tracking-wider text-white">Done</Text>
         </Pressable>
-        {children !== undefined ? (
-          <View className="absolute inset-x-0 bottom-6 items-center">{children}</View>
-        ) : null}
+        <View className="absolute inset-x-0 bottom-6 items-center">
+          <Text className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium uppercase tracking-wider text-white/80">
+            {mode === 'preview' ? 'Preview' : 'Objects'}
+          </Text>
+        </View>
       </View>
     </Modal>
   )

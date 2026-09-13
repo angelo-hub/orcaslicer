@@ -592,16 +592,7 @@ export default function HomeScreen(): React.JSX.Element {
           maxLayer={maxLayer}
           showTravels={false}
           revision={revision}
-        >
-          <SegmentedControl
-            value={viewMode}
-            options={[
-              { value: 'scene', label: 'Objects' },
-              { value: 'preview', label: 'Preview', disabled: stats === null },
-            ]}
-            onChange={setViewMode}
-          />
-        </FullscreenViewport>
+        />
       ) : null}
 
       {pickerKind !== null ? (
