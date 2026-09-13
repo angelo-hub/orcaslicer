@@ -144,6 +144,31 @@ export function ensureDirectories(): void {
   }
 }
 
+/** Directory where a user preset of the given kind lives (data/user/<kind>). */
+export function userPresetDirectory(kind: 'printer' | 'filament' | 'process'): Directory {
+  return new Directory(dataDirectory(), 'user', kind)
+}
+
+/** Copy a preset JSON already on disk into data/user/<kind> under the desired basename. */
+export function importUserPreset(kind: 'printer' | 'filament' | 'process', sourcePath: string): string {
+  const source = new File(sourcePath)
+  if (!source.exists) throw new Error(`Missing file: ${sourcePath}`)
+  const dir = userPresetDirectory(kind)
+  if (!dir.exists) dir.create({ intermediates: true })
+  // Verify it parses as JSON before storing.
+  const text = source.textSync()
+  try {
+    JSON.parse(text)
+  } catch (e) {
+    throw new Error(`Not a valid preset JSON: ${String(e)}`)
+  }
+  const baseName = source.name.replace(/\.json$/i, '')
+  const target = new File(dir, `${baseName}.json`)
+  if (target.exists) target.delete()
+  target.write(text)
+  return baseName
+}
+
 /** Vendor ids that have an index file on disk. */
 export function installedVendors(): string[] {
   const dir = profilesDirectory()

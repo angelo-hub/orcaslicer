@@ -32,6 +32,9 @@ public:
   std::string selectedPreset(PresetKind kind) override;
   bool selectPreset(PresetKind kind, const std::string& name) override;
   bool selectFilament(double extruder, const std::string& name) override;
+  bool savePresetAs(PresetKind kind, const std::string& name) override;
+  bool deletePreset(PresetKind kind, const std::string& name) override;
+  std::string presetFile(PresetKind kind, const std::string& name) override;
   BedInfo bed() override;
 
   // Options

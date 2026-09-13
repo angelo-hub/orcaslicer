@@ -82,6 +82,9 @@ namespace margelo::nitro::orca {
       virtual std::string selectedPreset(PresetKind kind) = 0;
       virtual bool selectPreset(PresetKind kind, const std::string& name) = 0;
       virtual bool selectFilament(double extruder, const std::string& name) = 0;
+      virtual bool savePresetAs(PresetKind kind, const std::string& name) = 0;
+      virtual bool deletePreset(PresetKind kind, const std::string& name) = 0;
+      virtual std::string presetFile(PresetKind kind, const std::string& name) = 0;
       virtual BedInfo bed() = 0;
       virtual std::string option(const std::string& key) = 0;
       virtual bool setOption(const std::string& key, const std::string& value) = 0;

@@ -154,6 +154,17 @@ public:
     bool                     select_filament(size_t extruder, const std::string& name);
     BedInfo                  bed() const;
 
+    // Preset lifecycle. save_preset_as forks the currently-edited preset of `kind` under
+    // a new user preset name and writes it to disk (data_dir/user/...); the new preset
+    // is selected. Returns false if `name` already exists on a preset that cannot be
+    // overwritten (system, project-embedded, external). delete_preset removes a user
+    // preset from the collection and unlinks its file; false if the preset is not user-
+    // owned or does not exist. preset_file returns the absolute path of a preset's JSON
+    // file, empty if the preset has no on-disk backing.
+    bool                     save_preset_as(PresetKind kind, const std::string& name);
+    bool                     delete_preset(PresetKind kind, const std::string& name);
+    std::string              preset_file(PresetKind kind, const std::string& name) const;
+
     // Options, read and written on the edited preset that owns the key. Values are in
     // the serialized form libslic3r uses in its config files ("0.2", "1,2,3", "nil").
     std::string              option(const std::string& key) const;

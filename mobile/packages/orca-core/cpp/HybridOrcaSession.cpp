@@ -150,6 +150,21 @@ bool HybridOrcaSession::selectFilament(double extruder, const std::string& name)
   return _session.select_filament(static_cast<size_t>(extruder), name);
 }
 
+bool HybridOrcaSession::savePresetAs(PresetKind kind, const std::string& name) {
+  auto lock = lockNow();
+  return _session.save_preset_as(toCore(kind), name);
+}
+
+bool HybridOrcaSession::deletePreset(PresetKind kind, const std::string& name) {
+  auto lock = lockNow();
+  return _session.delete_preset(toCore(kind), name);
+}
+
+std::string HybridOrcaSession::presetFile(PresetKind kind, const std::string& name) {
+  auto lock = lockNow();
+  return _session.preset_file(toCore(kind), name);
+}
+
 BedInfo HybridOrcaSession::bed() {
   auto lock = lockNow();
   const Slic3r::Mobile::BedInfo bed = _session.bed();

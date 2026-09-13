@@ -98,6 +98,12 @@ export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }
   /** Select by name. For filaments this selects extruder 0. */
   selectPreset(kind: PresetKind, name: string): boolean
   selectFilament(extruder: number, name: string): boolean
+  /** Fork the current edited preset of `kind` under a new user preset name and persist it. Returns false when the name collides with a system / project / external preset. */
+  savePresetAs(kind: PresetKind, name: string): boolean
+  /** Delete a user preset by name. Returns false if the preset is not user-owned or does not exist. */
+  deletePreset(kind: PresetKind, name: string): boolean
+  /** Absolute path of a preset's JSON file, empty when it has no on-disk backing. */
+  presetFile(kind: PresetKind, name: string): string
   bed(): BedInfo
 
   /** Serialized option value as libslic3r writes it in config files ("0.2", "1,2,3", "nil"). */

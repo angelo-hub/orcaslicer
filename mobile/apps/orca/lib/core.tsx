@@ -49,8 +49,14 @@ export function CoreProvider({ children }: { children: React.ReactNode }): React
         // reloadPresets wipes data/system before rereading so a fresh
         // vendor install (or a reinstall over a corrupt file) really
         // takes effect, unlike loadPresets which skips a same-version
-        // reinstall and leaves the mirror as-is.
-        setPresetError(await session.reloadPresets())
+        // reinstall and leaves the mirror as-is. A native throw (bad
+        // filesystem state, malformed profile) surfaces as an error
+        // banner rather than an unhandled rejection.
+        try {
+          setPresetError(await session.reloadPresets())
+        } catch (e) {
+          setPresetError(String(e))
+        }
       },
     }),
     [core, session, presetError, ready]

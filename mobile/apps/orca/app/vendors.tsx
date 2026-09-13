@@ -1,13 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
+import * as DocumentPicker from 'expo-document-picker'
 import { useRouter } from 'expo-router'
 import React, { useMemo, useState } from 'react'
-import { ActivityIndicator, Image, SectionList, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Pressable, SectionList, Text, TextInput, View } from 'react-native'
 
 import { Avatar } from '@/ui/Avatar'
 import { Button } from '@/ui/Button'
 import { useCore } from '@/lib/core'
 import { useDownloadsStore } from '@/lib/downloads'
-import { availablePrinters, DEFAULT_PROFILE_SOURCE, installedVendors, type AvailablePrinter } from '@/lib/profiles'
+import {
+  availablePrinters,
+  DEFAULT_PROFILE_SOURCE,
+  importUserPreset,
+  installedVendors,
+  type AvailablePrinter,
+} from '@/lib/profiles'
 import { queryKeys } from '@/lib/queries'
 
 // Printer-first browser. Installations run through the shared downloads store,
@@ -65,18 +72,44 @@ export default function VendorsScreen(): React.JSX.Element {
   return (
     <View className="flex-1 bg-neutral-50 dark:bg-neutral-950">
       <View className="border-b border-neutral-100 px-5 pb-3 pt-3 dark:border-neutral-800">
-        <View className="flex-row items-center rounded-2xl bg-neutral-100 px-3 py-2 dark:bg-neutral-900">
-          <Text className="mr-2 text-[15px] text-neutral-400">Search</Text>
-          <TextInput
-            className="flex-1 text-[15px] text-neutral-900 dark:text-neutral-100"
-            placeholder="Printer or manufacturer…"
-            placeholderTextColor="#9ca3af"
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-          />
+        <View className="flex-row items-center gap-2">
+          <View className="flex-1 flex-row items-center rounded-2xl bg-neutral-100 px-3 py-2 dark:bg-neutral-900">
+            <Text className="mr-2 text-[15px] text-neutral-400">Search</Text>
+            <TextInput
+              className="flex-1 text-[15px] text-neutral-900 dark:text-neutral-100"
+              placeholder="Printer or manufacturer…"
+              placeholderTextColor="#9ca3af"
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+          </View>
+          <Pressable
+            onPress={async () => {
+              const picked = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true,
+                multiple: false,
+              })
+              const asset = picked.assets?.[0]
+              if (picked.canceled || asset === undefined) return
+              try {
+                const path = decodeURIComponent(asset.uri.replace(/^file:\/\//, ''))
+                const name = importUserPreset('printer', path)
+                await reloadPresets()
+                Alert.alert('Imported', `Added ${name} to your printer presets.`)
+              } catch (e) {
+                Alert.alert('Import failed', String(e))
+              }
+            }}
+            className="rounded-full bg-neutral-100 px-3 py-2 active:bg-neutral-200 dark:bg-neutral-800 dark:active:bg-neutral-700"
+          >
+            <Text className="text-[12px] font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-200">
+              Import
+            </Text>
+          </Pressable>
         </View>
         {printers.isError ? <Text className="pt-2 text-[13px] text-red-500">{String(printers.error)}</Text> : null}
       </View>

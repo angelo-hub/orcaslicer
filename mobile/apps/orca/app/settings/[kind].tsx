@@ -1,9 +1,10 @@
+import * as Sharing from 'expo-sharing'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import React, { useCallback, useMemo, useState } from 'react'
-import { FlatList, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native'
+import { Alert, FlatList, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native'
 import { getOptionDefinitions, type OptionDefinition, type OrcaSession, type PresetKind } from 'react-native-orca-core'
 
-import { useSession } from '@/lib/core'
+import { useCore, useSession } from '@/lib/core'
 import { t } from '@/lib/i18n'
 import {
   decodeBool,
@@ -21,6 +22,7 @@ import {
 import { Button } from '@/ui/Button'
 import { Card } from '@/ui/Card'
 import { Chip } from '@/ui/Chip'
+import { PromptSheet } from '@/ui/PromptSheet'
 
 // The parameter editor. Rows are generated from the option definitions the
 // core exports, grouped by category and filtered by mode and search; every
@@ -198,12 +200,74 @@ export default function SettingsScreen(): React.JSX.Element {
   const params = useLocalSearchParams<{ kind: string }>()
   const kind: PresetKind = isPresetKind(params.kind) ? params.kind : 'process'
   const session = useSession()
+  const { reloadPresets } = useCore()
   const [mode, setMode] = useState<OptionMode>('simple')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [renaming, setRenaming] = useState(false)
 
   const onChanged = useCallback(() => setRevision((r) => r + 1), [])
+
+  const saveAs = useCallback(
+    async (name: string) => {
+      if (session === null) return
+      setSaving(true)
+      try {
+        const ok = session.savePresetAs(kind, name)
+        if (!ok) {
+          Alert.alert('Could not save', `A system preset called "${name}" already exists.`)
+          return
+        }
+        await reloadPresets()
+        setRenaming(false)
+        onChanged()
+      } finally {
+        setSaving(false)
+      }
+    },
+    [session, kind, reloadPresets, onChanged],
+  )
+
+  const currentIsUser = useMemo(() => {
+    if (session === null) return false
+    const name = session.selectedPreset(kind)
+    const info = session.presets(kind).find((p) => p.name === name)
+    return info?.isUser === true
+  }, [session, kind, revision])
+
+  const deleteCurrent = useCallback(() => {
+    if (session === null) return
+    const name = session.selectedPreset(kind)
+    Alert.alert('Delete preset', `Delete "${name}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const ok = session.deletePreset(kind, name)
+          if (!ok) {
+            Alert.alert('Could not delete', 'System presets cannot be removed.')
+            return
+          }
+          await reloadPresets()
+          onChanged()
+        },
+      },
+    ])
+  }, [session, kind, reloadPresets, onChanged])
+
+  const exportCurrent = useCallback(async () => {
+    if (session === null) return
+    const name = session.selectedPreset(kind)
+    const path = session.presetFile(kind, name)
+    if (path === '') {
+      Alert.alert('Nothing to export', 'This preset has no on-disk backing yet.')
+      return
+    }
+    await Sharing.shareAsync('file://' + path, { mimeType: 'application/json', dialogTitle: `${name}.json` })
+  }, [session, kind])
 
   const definitions = useMemo(
     () => getOptionDefinitions().filter((d) => d.kind === kind && visibleInMode(d, mode) && matchesQuery(d, query)),
@@ -246,8 +310,8 @@ export default function SettingsScreen(): React.JSX.Element {
               <Chip key={m} label={m.charAt(0).toUpperCase() + m.slice(1)} selected={mode === m} onPress={() => setMode(m)} />
             ))}
           </View>
-          {modified.size > 0 ? (
-            <View className="ml-auto">
+          <View className="ml-auto flex-row gap-1">
+            {modified.size > 0 ? (
               <Button
                 title={`Discard ${modified.size}`}
                 variant="ghost"
@@ -256,8 +320,13 @@ export default function SettingsScreen(): React.JSX.Element {
                   onChanged()
                 }}
               />
-            </View>
-          ) : null}
+            ) : null}
+            <Button title="Save as" variant="secondary" onPress={() => setRenaming(true)} />
+            <Button title="Export" variant="ghost" onPress={exportCurrent} />
+            {currentIsUser ? (
+              <Button title="Delete" variant="ghost" onPress={deleteCurrent} />
+            ) : null}
+          </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
           <View className="flex-row gap-1.5">
@@ -273,6 +342,17 @@ export default function SettingsScreen(): React.JSX.Element {
           </View>
         </ScrollView>
       </View>
+
+      <PromptSheet
+        visible={renaming}
+        title="Save as new preset"
+        message={`Fork "${currentPreset}" under a new user preset name. The new preset is selected right away.`}
+        placeholder="e.g. My PLA Fast"
+        defaultValue={currentPreset.replace(/^Default /, '')}
+        confirmLabel={saving ? 'Saving…' : 'Save'}
+        onCancel={() => setRenaming(false)}
+        onConfirm={saveAs}
+      />
 
       <ScrollView contentContainerClassName="px-4 pt-4 pb-8">
         {shownGroups.length === 0 ? (

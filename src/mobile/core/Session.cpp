@@ -131,6 +131,11 @@ static std::string load_presets_into(PresetBundle& bundle, bool force_refresh)
         fs::remove_all(system_dir, ec);
         // ignore ec: a partial wipe is corrected by the reinstall that follows
     }
+    // Recreate the (possibly empty) mirror directory so load_presets's
+    // directory_iterator does not throw when no vendor exists in resources
+    // (i.e. right after the last remaining vendor was uninstalled).
+    boost::system::error_code ec;
+    fs::create_directories(system_dir, ec);
 
     std::vector<std::string> to_install;
     for (const std::string& vendor : vendor_names_in(fs::path(resources_dir()) / "profiles"))
@@ -272,6 +277,38 @@ void Session::discard_modified_options(PresetKind kind)
 {
     m_impl->collection(kind).discard_current_changes();
     m_impl->sliced = false;
+}
+
+bool Session::save_preset_as(PresetKind kind, const std::string& name)
+{
+    if (name.empty())
+        return false;
+    PresetCollection& c = m_impl->collection(kind);
+    // Refuse to overwrite a preset the collection considers non-editable, matching
+    // save_current_preset's own early return; ask up front so the caller gets a bool.
+    if (const Preset* existing = c.find_preset(name, false); existing != nullptr && ! existing->can_overwrite())
+        return false;
+    c.save_current_preset(name, /*detach=*/false, /*save_to_project=*/false, nullptr);
+    m_impl->sliced = false;
+    return true;
+}
+
+bool Session::delete_preset(PresetKind kind, const std::string& name)
+{
+    PresetCollection& c = m_impl->collection(kind);
+    const Preset* p = c.find_preset(name, false);
+    if (p == nullptr || ! p->is_user())
+        return false;
+    const bool ok = c.delete_preset(name, /*force=*/false);
+    if (ok)
+        m_impl->sliced = false;
+    return ok;
+}
+
+std::string Session::preset_file(PresetKind kind, const std::string& name) const
+{
+    const Preset* p = m_impl->collection(kind).find_preset(name, false);
+    return p != nullptr ? p->file : std::string();
 }
 
 static const char* type_name(ConfigOptionType type)

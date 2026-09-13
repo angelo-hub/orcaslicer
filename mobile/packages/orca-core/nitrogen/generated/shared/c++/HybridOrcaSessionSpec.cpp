@@ -23,6 +23,9 @@ namespace margelo::nitro::orca {
       prototype.registerHybridMethod("selectedPreset", &HybridOrcaSessionSpec::selectedPreset);
       prototype.registerHybridMethod("selectPreset", &HybridOrcaSessionSpec::selectPreset);
       prototype.registerHybridMethod("selectFilament", &HybridOrcaSessionSpec::selectFilament);
+      prototype.registerHybridMethod("savePresetAs", &HybridOrcaSessionSpec::savePresetAs);
+      prototype.registerHybridMethod("deletePreset", &HybridOrcaSessionSpec::deletePreset);
+      prototype.registerHybridMethod("presetFile", &HybridOrcaSessionSpec::presetFile);
       prototype.registerHybridMethod("bed", &HybridOrcaSessionSpec::bed);
       prototype.registerHybridMethod("option", &HybridOrcaSessionSpec::option);
       prototype.registerHybridMethod("setOption", &HybridOrcaSessionSpec::setOption);
