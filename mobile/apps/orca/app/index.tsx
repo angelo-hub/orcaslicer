@@ -9,7 +9,6 @@ import { OrcaViewport, type ObjectInfo, type PresetInfo, type PresetKind, type S
 import { Alert as InlineAlert } from '@/ui/Alert'
 import { Button } from '@/ui/Button'
 import { Card, Row } from '@/ui/Card'
-import { FullscreenViewport } from '@/ui/FullscreenViewport'
 import { PresetPicker } from '@/ui/PresetPicker'
 import { PresetRow } from '@/ui/PresetRow'
 import { ProgressBar } from '@/ui/ProgressBar'
@@ -60,7 +59,6 @@ export default function HomeScreen(): React.JSX.Element {
   const [pickerKind, setPickerKind] = useState<PresetKind | null>(null)
   const [pickerPresets, setPickerPresets] = useState<PresetInfo[]>([])
   const [pastSlices, setPastSlices] = useState<HistoryEntry[]>([])
-  const [fullscreen, setFullscreen] = useState(false)
 
   const refresh = useCallback(() => {
     if (session === null) return
@@ -311,7 +309,12 @@ export default function HomeScreen(): React.JSX.Element {
               revision={revision}
             />
             <Pressable
-              onPress={() => setFullscreen(true)}
+              onPress={() =>
+                router.push({
+                  pathname: '/fullscreen',
+                  params: { mode: viewMode, layer: String(maxLayer) },
+                })
+              }
               hitSlop={12}
               className="absolute right-3 top-3 rounded-full bg-neutral-900/80 px-3 py-2 active:opacity-70 dark:bg-white/20"
               accessibilityLabel="Enter fullscreen viewport"
@@ -582,18 +585,6 @@ export default function HomeScreen(): React.JSX.Element {
           OrcaCore {version}
         </Text>
       </ScrollView>
-
-      {fullscreen ? (
-        <FullscreenViewport
-          visible
-          onClose={() => setFullscreen(false)}
-          sessionId={session.id}
-          mode={viewMode}
-          maxLayer={maxLayer}
-          showTravels={false}
-          revision={revision}
-        />
-      ) : null}
 
       {pickerKind !== null ? (
         <PresetPicker

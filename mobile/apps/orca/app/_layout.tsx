@@ -57,6 +57,10 @@ export default function RootLayout(): React.JSX.Element {
           />
           <Stack.Screen name="settings/[kind]" options={{ title: 'Edit preset' }} />
           <Stack.Screen name="host/[id]" options={{ title: 'Destination' }} />
+          <Stack.Screen
+            name="fullscreen"
+            options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade' }}
+          />
           <Stack.Screen name="vendors" options={{ title: 'Choose printer' }} />
           <Stack.Screen name="printers" options={{ title: 'Printers' }} />
         </Stack>
