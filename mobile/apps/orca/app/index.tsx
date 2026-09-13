@@ -9,6 +9,7 @@ import { OrcaViewport, type ObjectInfo, type PresetInfo, type PresetKind, type S
 import { Alert as InlineAlert } from '@/ui/Alert'
 import { Button } from '@/ui/Button'
 import { Card, Row } from '@/ui/Card'
+import { FullscreenViewport } from '@/ui/FullscreenViewport'
 import { PresetPicker } from '@/ui/PresetPicker'
 import { PresetRow } from '@/ui/PresetRow'
 import { ProgressBar } from '@/ui/ProgressBar'
@@ -58,6 +59,7 @@ export default function HomeScreen(): React.JSX.Element {
   const [pickerKind, setPickerKind] = useState<PresetKind | null>(null)
   const [pickerPresets, setPickerPresets] = useState<PresetInfo[]>([])
   const [pastSlices, setPastSlices] = useState<HistoryEntry[]>([])
+  const [fullscreen, setFullscreen] = useState(false)
 
   const refresh = useCallback(() => {
     if (session === null) return
@@ -298,7 +300,7 @@ export default function HomeScreen(): React.JSX.Element {
         ) : null}
 
         <View className="mb-6 gap-3">
-          <View className="h-[360px] overflow-hidden rounded-3xl bg-white shadow-soft dark:bg-neutral-900">
+          <View className="relative h-[360px] overflow-hidden rounded-3xl bg-white shadow-soft dark:bg-neutral-900">
             <OrcaViewport
               style={{ flex: 1 }}
               sessionId={session.id}
@@ -307,6 +309,14 @@ export default function HomeScreen(): React.JSX.Element {
               showTravels={false}
               revision={revision}
             />
+            <Pressable
+              onPress={() => setFullscreen(true)}
+              hitSlop={12}
+              className="absolute right-3 top-3 rounded-full bg-neutral-900/80 px-3 py-2 active:opacity-70 dark:bg-white/20"
+              accessibilityLabel="Enter fullscreen viewport"
+            >
+              <Text className="text-[13px] font-semibold text-white">↗ Fullscreen</Text>
+            </Pressable>
           </View>
           <SegmentedControl
             value={viewMode}
@@ -337,7 +347,7 @@ export default function HomeScreen(): React.JSX.Element {
           ) : null}
         </View>
 
-        <Card className="mb-6" title="Presets" padded={false} index={0}>
+        <Card className="mb-6" title="Presets" padded={false} index={0} collapsible collapseKey="presets">
           {PRESET_KINDS.map(({ kind, label }, i) => (
             <PresetRow
               key={kind}
@@ -354,6 +364,8 @@ export default function HomeScreen(): React.JSX.Element {
         <Card
           className="mb-6"
           index={1}
+          collapsible
+          collapseKey="plate"
           title="Plate"
           subtitle={objects.length === 0 ? 'Nothing on the plate yet' : `${objects.length} object${objects.length === 1 ? '' : 's'}`}
           padded={false}
@@ -412,7 +424,7 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         </Card>
 
-        <Card className="mb-6" title="Slice" index={2}>
+        <Card className="mb-6" title="Slice" index={2} collapsible collapseKey="slice">
           {progress !== null ? (
             <View className="gap-3">
               <View className="flex-row items-center justify-between">
@@ -486,6 +498,9 @@ export default function HomeScreen(): React.JSX.Element {
           <Card
             className="mb-6"
             index={3}
+            collapsible
+            collapseKey="recent"
+            defaultCollapsed
             title="Recent"
             subtitle={`${pastSlices.length} slice${pastSlices.length === 1 ? '' : 's'} in history`}
             padded={false}
@@ -521,6 +536,9 @@ export default function HomeScreen(): React.JSX.Element {
         <Card
           className="mb-6"
           index={4}
+          collapsible
+          collapseKey="destinations"
+          defaultCollapsed
           title="Destinations"
           subtitle={printers.length === 0 ? 'None configured' : `${printers.length} configured`}
           padded={false}
@@ -560,6 +578,25 @@ export default function HomeScreen(): React.JSX.Element {
           OrcaCore {version}
         </Text>
       </ScrollView>
+
+      <FullscreenViewport
+        visible={fullscreen}
+        onClose={() => setFullscreen(false)}
+        sessionId={session.id}
+        mode={viewMode}
+        maxLayer={maxLayer}
+        showTravels={false}
+        revision={revision}
+      >
+        <SegmentedControl
+          value={viewMode}
+          options={[
+            { value: 'scene', label: 'Objects' },
+            { value: 'preview', label: 'Preview', disabled: stats === null },
+          ]}
+          onChange={setViewMode}
+        />
+      </FullscreenViewport>
 
       {pickerKind !== null ? (
         <PresetPicker

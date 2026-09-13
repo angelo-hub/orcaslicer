@@ -365,6 +365,8 @@ export default function SettingsScreen(): React.JSX.Element {
               className="mb-4"
               padded={false}
               index={groupIdx}
+              collapsible
+              collapseKey={`settings:${kind}:${group.category}`}
             >
               {group.options.map((def, i) => (
                 <OptionRow
