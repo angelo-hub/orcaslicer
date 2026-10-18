@@ -16,9 +16,22 @@ namespace margelo::nitro::orca {
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("version", &HybridOrcaCoreSpec::getVersion);
       prototype.registerHybridGetter("upstreamCommit", &HybridOrcaCoreSpec::getUpstreamCommit);
+      prototype.registerHybridGetter("pluginsSupported", &HybridOrcaCoreSpec::getPluginsSupported);
       prototype.registerHybridMethod("initialize", &HybridOrcaCoreSpec::initialize);
       prototype.registerHybridMethod("optionDefinitionsJson", &HybridOrcaCoreSpec::optionDefinitionsJson);
       prototype.registerHybridMethod("createSession", &HybridOrcaCoreSpec::createSession);
+      prototype.registerHybridMethod("pluginsInitialize", &HybridOrcaCoreSpec::pluginsInitialize);
+      prototype.registerHybridMethod("pluginsSetCloudUser", &HybridOrcaCoreSpec::pluginsSetCloudUser);
+      prototype.registerHybridMethod("pluginsSetAppLanguage", &HybridOrcaCoreSpec::pluginsSetAppLanguage);
+      prototype.registerHybridMethod("pluginsDiscover", &HybridOrcaCoreSpec::pluginsDiscover);
+      prototype.registerHybridMethod("pluginList", &HybridOrcaCoreSpec::pluginList);
+      prototype.registerHybridMethod("pluginLoad", &HybridOrcaCoreSpec::pluginLoad);
+      prototype.registerHybridMethod("pluginUnload", &HybridOrcaCoreSpec::pluginUnload);
+      prototype.registerHybridMethod("pluginRemove", &HybridOrcaCoreSpec::pluginRemove);
+      prototype.registerHybridMethod("pluginSetCapabilityEnabled", &HybridOrcaCoreSpec::pluginSetCapabilityEnabled);
+      prototype.registerHybridMethod("pluginPermissionGrant", &HybridOrcaCoreSpec::pluginPermissionGrant);
+      prototype.registerHybridMethod("setPluginEventListener", &HybridOrcaCoreSpec::setPluginEventListener);
+      prototype.registerHybridMethod("pluginAnswer", &HybridOrcaCoreSpec::pluginAnswer);
     });
   }
 

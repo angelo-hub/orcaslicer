@@ -568,6 +568,13 @@ bool PythonInterpreter::initialize()
         // runtime used by plugins.
         config.use_environment    = 0;
         config.user_site_directory = 0;
+#ifdef ORCA_MOBILE_PLUGINS
+        // The app bundle is read-only and the process is not ours to signal: keep .pyc
+        // files in the data dir and leave the signal handlers to the app.
+        config.install_signal_handlers = 0;
+        config.write_bytecode          = 1;
+        PyConfig_SetBytesString(&config, &config.pycache_prefix, (fs::path(data_dir()) / "python" / "pycache").string().c_str());
+#endif
 
         BOOST_LOG_TRIVIAL(debug) << "Calling PyConfig_SetBytesString with home=" << python_home;
         PyStatus status = PyConfig_SetBytesString(&config, &config.home, python_home.c_str());

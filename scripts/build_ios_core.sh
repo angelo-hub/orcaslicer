@@ -23,6 +23,7 @@ IOS_MIN_VERSION="16.0"
 BUILD_ONLY=""
 MAKE_XCFRAMEWORK=""
 RESUME=""
+PLUGINS=""
 
 usage() {
     echo "Usage: ./scripts/build_ios_core.sh [options]"
@@ -36,10 +37,12 @@ usage() {
     echo "   -r: Resume deps from a restored prefix and stamps without sources: every"
     echo "       dependency with a pending step is rebuilt from scratch"
     echo "   -x: After building, merge the slices into build/ios-xcframework/OrcaCore.xcframework"
+    echo "   -p: Embed the Python plugin runtime (DEPS_MOBILE_PLUGINS / ORCA_MOBILE_PLUGINS);"
+    echo "       with -x, Python.xcframework lands next to OrcaCore.xcframework"
     echo "   -h: This help"
 }
 
-while getopts ":dsa:t:c:bj:rxh" opt; do
+while getopts ":dsa:t:c:bj:rxph" opt; do
     case "${opt}" in
         d ) BUILD_TARGET="deps" ;;
         s ) BUILD_TARGET="core" ;;
@@ -50,6 +53,7 @@ while getopts ":dsa:t:c:bj:rxh" opt; do
         j ) export CMAKE_BUILD_PARALLEL_LEVEL="$OPTARG" ;;
         r ) RESUME="1" ;;
         x ) MAKE_XCFRAMEWORK="1" ;;
+        p ) PLUGINS="1" ;;
         h ) usage; exit 0 ;;
         * ) usage; exit 1 ;;
     esac
@@ -74,6 +78,13 @@ case "$SLICES" in
     all )       SLICE_LIST="device simulator" ;;
     * ) echo "Unknown slice '$SLICES' (device, simulator or all)" >&2; exit 1 ;;
 esac
+
+DEPS_PLUGIN_FLAGS=""
+CORE_PLUGIN_FLAGS=""
+if [ "1" == "$PLUGINS" ]; then
+    DEPS_PLUGIN_FLAGS="-DDEPS_MOBILE_PLUGINS=ON"
+    CORE_PLUGIN_FLAGS="-DORCA_MOBILE_PLUGINS=ON"
+fi
 
 HOST_ARCH="$(uname -m)"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -124,6 +135,7 @@ build_deps() {
                     -DCMAKE_SYSTEM_PROCESSOR="$ARCH" \
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION" \
                     -DCMAKE_IGNORE_PREFIX_PATH="$CMAKE_IGNORE_PREFIX_PATH" \
+                    $DEPS_PLUGIN_FLAGS \
                     $CMAKE_POLICY_COMPAT
             fi
             if [ "1" == "$RESUME" ]; then
@@ -194,6 +206,7 @@ build_core() {
                     -DSLIC3R_PCH=0 \
                     -DZLIB_INCLUDE_DIR="$DEPS_PREFIX/include" \
                     -DIconv_INCLUDE_DIR="$DEPS_PREFIX/include" \
+                    $CORE_PLUGIN_FLAGS \
                     $CMAKE_POLICY_COMPAT
             fi
             cmake --build . --target libslic3r_mobile
@@ -268,6 +281,18 @@ make_xcframework() {
         set -x
         xcodebuild -create-xcframework "${args[@]}" -output "$out_dir/OrcaCore.xcframework"
     )
+
+    # The Python runtime is one XCFramework holding every slice, so any prefix's copy is
+    # the whole of it. The app's podspec vendors it from next to OrcaCore.xcframework.
+    if [ "1" == "$PLUGINS" ]; then
+        for slice in $SLICE_LIST; do
+            slice_settings "$slice"
+            if [ -d "$DEPS_PREFIX/Python.xcframework" ]; then
+                cp -R "$DEPS_PREFIX/Python.xcframework" "$out_dir/Python.xcframework"
+                break
+            fi
+        done
+    fi
 }
 
 echo "Build params:"

@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest'
 
-import { nextOffset, parseCatalog, parseDownload, sniffPackageKind } from './parse.ts'
+import {
+  nextOffset,
+  parseCatalog,
+  parseDownload,
+  parseNativePlugins,
+  sniffPackageKind,
+} from './parse.ts'
 
 const item = {
   uuid: '3992f039-64b9-49eb-b34c-cf63b84fd581',
@@ -98,5 +104,36 @@ describe('sniffPackageKind', () => {
     expect(sniffPackageKind(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0]))).toBe('whl')
     expect(sniffPackageKind(new TextEncoder().encode('# /// script\n'))).toBe('py')
     expect(sniffPackageKind(new Uint8Array([]))).toBe('py')
+  })
+})
+
+describe('parseNativePlugins', () => {
+  test('reads the runtime list and drops rows without a key', () => {
+    const list = parseNativePlugins(
+      JSON.stringify([
+        {
+          key: 'uuid-1',
+          name: 'Spool',
+          version: '1.0.0',
+          installed_version: '1.0.0',
+          cloud_uuid: 'uuid-1',
+          enabled: true,
+          loaded: true,
+          loading: false,
+          error: '',
+          dependencies: ['requests'],
+          capabilities: [{ name: 'Spool page', type: 'pages', enabled: true }],
+        },
+        { name: 'keyless' },
+      ]),
+    )
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({
+      key: 'uuid-1',
+      loaded: true,
+      dependencies: ['requests'],
+      capabilities: [{ name: 'Spool page', type: 'pages', enabled: true }],
+    })
+    expect(parseNativePlugins('not json')).toEqual([])
   })
 })

@@ -15,10 +15,15 @@
 
 // Forward declaration of `HybridOrcaSessionSpec` to properly resolve imports.
 namespace margelo::nitro::orca { class HybridOrcaSessionSpec; }
+// Forward declaration of `PluginEvent` to properly resolve imports.
+namespace margelo::nitro::orca { struct PluginEvent; }
 
 #include <string>
 #include <memory>
 #include "HybridOrcaSessionSpec.hpp"
+#include <NitroModules/Promise.hpp>
+#include "PluginEvent.hpp"
+#include <functional>
 
 namespace margelo::nitro::orca {
 
@@ -49,12 +54,25 @@ namespace margelo::nitro::orca {
       // Properties
       virtual std::string getVersion() = 0;
       virtual std::string getUpstreamCommit() = 0;
+      virtual bool getPluginsSupported() = 0;
 
     public:
       // Methods
       virtual void initialize(const std::string& resourcesDir, const std::string& dataDir) = 0;
       virtual std::string optionDefinitionsJson() = 0;
       virtual std::shared_ptr<HybridOrcaSessionSpec> createSession() = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginsInitialize(const std::string& pythonHome, const std::string& cloudUserId) = 0;
+      virtual void pluginsSetCloudUser(const std::string& userId) = 0;
+      virtual void pluginsSetAppLanguage(const std::string& language) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginsDiscover() = 0;
+      virtual std::string pluginList() = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginLoad(const std::string& key) = 0;
+      virtual std::shared_ptr<Promise<bool>> pluginUnload(const std::string& key) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginRemove(const std::string& key) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginSetCapabilityEnabled(const std::string& key, const std::string& capability, bool enabled) = 0;
+      virtual bool pluginPermissionGrant(const std::string& key, const std::string& category, const std::string& target, bool granted) = 0;
+      virtual void setPluginEventListener(const std::function<void(const PluginEvent& /* event */)>& listener) = 0;
+      virtual void pluginAnswer(double requestId, const std::string& answer) = 0;
 
     protected:
       // Hybrid Setup

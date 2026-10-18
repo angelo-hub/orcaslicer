@@ -222,6 +222,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-notifications',
       'expo-background-task',
       './plugins/with-swiftui-core-weak-link',
+      './plugins/with-python-runtime',
       ['./plugins/with-development-team', { appleTeamId: 'H69V293M7J' }],
       [
         'expo-widgets',

@@ -945,6 +945,28 @@ find_package(NLopt 1.4 REQUIRED)
 
 # The embedded Python runtime is a GUI feature; the mobile core ships it only on request.
 if (NOT ORCA_MOBILE OR ORCA_MOBILE_PLUGINS)
+if (ORCA_MOBILE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+# BeeWare's prebuilt CPython (deps/python3/python3-ios.cmake): one Python.xcframework with
+# a dynamic framework per slice. The core is a static archive, so it only needs the headers;
+# the app links the framework the podspec vendors. No interpreter runs on the host, hence no
+# find_package(Python3): the imported target below is what pybind11::embed links.
+set(_python_xcframework "${CMAKE_PREFIX_PATH}/Python.xcframework")
+if (CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+    set(_python_slice "ios-arm64_x86_64-simulator")
+else ()
+    set(_python_slice "ios-arm64")
+endif ()
+set(_python_slice_dir "${_python_xcframework}/${_python_slice}")
+if (NOT EXISTS "${_python_slice_dir}/Python.framework/Python")
+    message(FATAL_ERROR "Python.xcframework slice not found at ${_python_slice_dir}; build the deps with DEPS_MOBILE_PLUGINS=ON")
+endif ()
+file(GLOB _python_include_dir "${_python_slice_dir}/include/python3.*")
+add_library(Python3::Python SHARED IMPORTED)
+set_target_properties(Python3::Python PROPERTIES
+    IMPORTED_LOCATION "${_python_slice_dir}/Python.framework/Python"
+    INTERFACE_INCLUDE_DIRECTORIES "${_python_include_dir}"
+)
+else () # a host Python
 # Use bundled Python from deps instead of system Python
 set(_bundled_python_version "3.12.13")
 set(_bundled_python_abi "312")
@@ -1008,6 +1030,7 @@ endif()
 find_package(Python3 ${_bundled_python_version} EXACT REQUIRED
     COMPONENTS Interpreter Development.Embed
 )
+endif () # a host Python
 
 # Provide a minimal pybind11::embed target sourced from deps_src/pybind11 headers.
 set(PYBIND11_SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps_src/pybind11")

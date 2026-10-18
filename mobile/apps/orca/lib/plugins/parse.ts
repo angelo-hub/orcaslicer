@@ -2,6 +2,7 @@ import type {
   CatalogResult,
   CloudPlugin,
   DownloadResult,
+  NativePlugin,
   PackageKind,
   PluginChangelog,
 } from './types'
@@ -116,6 +117,37 @@ export function parseDownload(root: Json): DownloadResult {
       .map((item) => ({ id: str(item, 'id'), reason: str(item, 'reason') })),
     unauthorized: idList(root.unauthorised),
   }
+}
+
+/** The core's plugin list (Plugins::list_json), tolerant of a malformed row. */
+export function parseNativePlugins(text: string): NativePlugin[] {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((v): v is Json => typeof v === 'object' && v !== null)
+    .map((item) => ({
+      key: str(item, 'key'),
+      name: str(item, 'name'),
+      version: str(item, 'version'),
+      installedVersion: str(item, 'installed_version'),
+      description: str(item, 'description'),
+      author: str(item, 'author'),
+      cloudUuid: str(item, 'cloud_uuid'),
+      enabled: item.enabled === true,
+      loaded: item.loaded === true,
+      loading: item.loading === true,
+      error: str(item, 'error'),
+      dependencies: strings(item.dependencies),
+      capabilities: (Array.isArray(item.capabilities) ? item.capabilities : [])
+        .filter((c): c is Json => typeof c === 'object' && c !== null)
+        .map((c) => ({ name: str(c, 'name'), type: str(c, 'type'), enabled: c.enabled === true })),
+    }))
+    .filter((p) => p.key !== '')
 }
 
 /** A wheel is a zip; anything else is treated as a single Python file. */

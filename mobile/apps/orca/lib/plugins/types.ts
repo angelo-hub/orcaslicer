@@ -77,6 +77,31 @@ export interface InstalledPlugin {
   state: InstallState
 }
 
+export interface NativeCapability {
+  name: string
+  /** 'slicing-pipeline', 'pages', 'script', 'printer-connection', … */
+  type: string
+  enabled: boolean
+}
+
+/** A plugin as the core's runtime sees it; see Plugins::list_json in src/mobile/core. */
+export interface NativePlugin {
+  key: string
+  name: string
+  version: string
+  installedVersion: string
+  description: string
+  author: string
+  cloudUuid: string
+  /** Auto-load on start, from the sidecar. */
+  enabled: boolean
+  loaded: boolean
+  loading: boolean
+  error: string
+  dependencies: string[]
+  capabilities: NativeCapability[]
+}
+
 /** One `name;uuid;capability` reference as presets store them. */
 export interface CapabilityRef {
   name: string

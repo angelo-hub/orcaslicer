@@ -363,6 +363,18 @@ export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }
   statistics(): SliceStatistics
 }
 
+/**
+ * What the plugin host tells the app; see src/mobile/core/Plugins.hpp for the payloads.
+ * `requestId` is non-zero when the host is waiting for pluginAnswer().
+ */
+export interface PluginEvent {
+  kind: string
+  pluginKey: string
+  capability: string
+  payloadJson: string
+  requestId: number
+}
+
 export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** Version of the slicing core compiled into the app. */
   readonly version: string
@@ -373,4 +385,30 @@ export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** Every print, filament and printer option definition as a JSON array; see Session::option_definitions_json. */
   optionDefinitionsJson(): string
   createSession(): OrcaSession
+
+  // The Python plugin host, process-wide; one-to-one with src/mobile/core/Plugins.hpp.
+  // Every call that may enter Python is a Promise: a plugin can block waiting for the
+  // app's answer to an event, so none of them may run on the JS thread.
+
+  /** False when the core was built without the runtime; every other plugin call then reports so. */
+  readonly pluginsSupported: boolean
+  /** Starts the interpreter. `pythonHome` holds lib/python3.x. Resolves to an error, or ''. */
+  pluginsInitialize(pythonHome: string, cloudUserId: string): Promise<string>
+  pluginsSetCloudUser(userId: string): void
+  pluginsSetAppLanguage(language: string): void
+  /** Rescans the plugin directories. Resolves to the discovery error, or ''. */
+  pluginsDiscover(): Promise<string>
+  /** Every known plugin as a JSON array; see Plugins::list_json. */
+  pluginList(): string
+  /** Loads a plugin, skipping pip dependencies. Resolves to the load error, or ''. */
+  pluginLoad(key: string): Promise<string>
+  pluginUnload(key: string): Promise<boolean>
+  /** Deletes the plugin's directory. Resolves to an error, or ''. */
+  pluginRemove(key: string): Promise<string>
+  pluginSetCapabilityEnabled(key: string, capability: string, enabled: boolean): Promise<string>
+  /** Adds or removes one target from a permission list in the plugin's sidecar. */
+  pluginPermissionGrant(key: string, category: string, target: string, granted: boolean): boolean
+  /** The listener may be called from any thread; Nitro delivers it on the JS thread. */
+  setPluginEventListener(listener: (event: PluginEvent) => void): void
+  pluginAnswer(requestId: number, answer: string): void
 }

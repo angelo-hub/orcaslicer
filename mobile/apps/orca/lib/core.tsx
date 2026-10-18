@@ -4,7 +4,10 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { storedCloudUserId, type CloudUser } from './cloud/auth'
 import { useCloudStore } from './cloud/store'
 import { adoptLocalPresets, registerSyncContext, syncIfStale, syncNow } from './cloud/sync'
+import { usePluginsEnabled } from './flags'
 import { deviceLanguage, setLanguage } from './i18n'
+import { ensurePluginRuntime } from './plugins/native'
+import { usePluginStore } from './plugins/store'
 import {
   dataDirectory,
   ensureDirectories,
@@ -79,6 +82,16 @@ export function CoreProvider({ children }: { children: React.ReactNode }): React
     syncIfStale()
     return () => registerSyncContext(null)
   }, [ready, session])
+
+  // The plugin runtime, when the flag is on and the installed core has one. It starts
+  // after the presets so a plugin's first load never races the preset mirror, and
+  // follows the cloud user so the right _subscribed folder is scanned.
+  const plugins = usePluginsEnabled()
+  const cloudUser = useCloudStore((s) => s.user)
+  useEffect(() => {
+    if (!ready || !plugins) return
+    void ensurePluginRuntime(core, cloudUser?.id ?? '', usePluginStore.getState().setRuntime)
+  }, [ready, plugins, core, cloudUser?.id])
 
   const value = useMemo<CoreState>(
     () => ({

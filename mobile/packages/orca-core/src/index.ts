@@ -22,6 +22,7 @@ export type {
   PickHit,
   PendingDelete,
   PlateInfo,
+  PluginEvent,
   PresetInfo,
   PresetKind,
   PresetRef,

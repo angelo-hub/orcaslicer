@@ -29,6 +29,9 @@ function entryLine(entry: PluginEntry): string {
 
 function badge(entry: PluginEntry): { text: string; tone: string } | null {
   if (entry.unauthorized) return { text: 'Unavailable', tone: 'text-red-600 dark:text-red-400' }
+  if (entry.native?.loaded) return { text: 'Loaded', tone: 'text-green-700 dark:text-green-400' }
+  if (entry.native !== null && entry.native.error !== '')
+    return { text: 'Failed', tone: 'text-red-600 dark:text-red-400' }
   if (entry.updateAvailable) return { text: 'Update', tone: 'text-amber-600 dark:text-amber-400' }
   if (entry.installed !== null)
     return { text: 'Installed', tone: 'text-green-700 dark:text-green-400' }
