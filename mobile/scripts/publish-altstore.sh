@@ -38,7 +38,9 @@ blob() {
 # Two releases finishing together race on the branch; the ref update below refuses a
 # non-fast-forward, and the whole edit is redone on the new head.
 for _ in 1 2 3; do
-  head=$(gh api "$api/git/ref/heads/$branch" -q .object.sha 2>/dev/null || true)
+  # A missing branch is a 404, and gh prints that response's body on stdout: keep the
+  # output only when the call succeeds, so the first publish starts the branch.
+  head=$(gh api "$api/git/ref/heads/$branch" -q .object.sha 2>/dev/null) || head=
   files=("$file")
   if [ -n "$head" ]; then
     fetch "$file"
