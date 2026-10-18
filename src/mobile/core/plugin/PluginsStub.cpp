@@ -22,5 +22,14 @@ bool        permission_grant(const std::string&, const std::string&, const std::
 void        set_event_sink(std::function<void(const PluginEvent&)>) {}
 void        answer(long, const std::string&) {}
 int         loaded_count() { return 0; }
+std::string page_html(const std::string&, const std::string&, std::string& error)
+{
+    error = NOT_SUPPORTED;
+    return {};
+}
+std::string page_icon(const std::string&, const std::string&) { return {}; }
+std::string page_open(const std::string&, const std::string&) { return NOT_SUPPORTED; }
+void        page_close(const std::string&, const std::string&) {}
+std::string page_send(const std::string&, const std::string&, const std::string&) { return NOT_SUPPORTED; }
 
 }}} // namespace Slic3r::Mobile::Plugins

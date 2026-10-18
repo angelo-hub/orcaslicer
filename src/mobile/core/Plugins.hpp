@@ -66,6 +66,16 @@ void answer(long request_id, const std::string& answer);
 
 int loaded_count();
 
+// A loaded pages capability, shown by the app in a web view. The page talks to the
+// plugin through page_send (the plugin's on_message) and, once page_open installed the
+// sender, the plugin's post_message arrives as a page-message event whose payload is the
+// JSON the plugin sent. page_close drops the sender when the view goes away.
+std::string page_html(const std::string& key, const std::string& capability, std::string& error);
+std::string page_icon(const std::string& key, const std::string& capability);
+std::string page_open(const std::string& key, const std::string& capability);  // error or ""
+void        page_close(const std::string& key, const std::string& capability);
+std::string page_send(const std::string& key, const std::string& capability, const std::string& message_json);
+
 } // namespace Plugins
 
 }} // namespace Slic3r::Mobile

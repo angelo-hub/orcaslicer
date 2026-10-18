@@ -411,4 +411,16 @@ export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** The listener may be called from any thread; Nitro delivers it on the JS thread. */
   setPluginEventListener(listener: (event: PluginEvent) => void): void
   pluginAnswer(requestId: number, answer: string): void
+
+  // A loaded pages capability. The app shows its HTML in a web view; messages from the
+  // page go to pluginPageSend, and after pluginPageOpen the plugin's post_message arrives
+  // as a 'page-message' event carrying the JSON it sent.
+  /** The page's HTML; rejects when the capability is missing or get_ui() raises. */
+  pluginPageHtml(key: string, capability: string): Promise<string>
+  pluginPageIcon(key: string, capability: string): Promise<string>
+  /** Starts relaying the plugin's messages for this page. Resolves to an error, or ''. */
+  pluginPageOpen(key: string, capability: string): Promise<string>
+  pluginPageClose(key: string, capability: string): void
+  /** Delivers a page message (JSON text) to the plugin's on_message. Resolves to an error, or ''. */
+  pluginPageSend(key: string, capability: string, messageJson: string): Promise<string>
 }

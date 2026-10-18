@@ -32,6 +32,11 @@ namespace margelo::nitro::orca {
       prototype.registerHybridMethod("pluginPermissionGrant", &HybridOrcaCoreSpec::pluginPermissionGrant);
       prototype.registerHybridMethod("setPluginEventListener", &HybridOrcaCoreSpec::setPluginEventListener);
       prototype.registerHybridMethod("pluginAnswer", &HybridOrcaCoreSpec::pluginAnswer);
+      prototype.registerHybridMethod("pluginPageHtml", &HybridOrcaCoreSpec::pluginPageHtml);
+      prototype.registerHybridMethod("pluginPageIcon", &HybridOrcaCoreSpec::pluginPageIcon);
+      prototype.registerHybridMethod("pluginPageOpen", &HybridOrcaCoreSpec::pluginPageOpen);
+      prototype.registerHybridMethod("pluginPageClose", &HybridOrcaCoreSpec::pluginPageClose);
+      prototype.registerHybridMethod("pluginPageSend", &HybridOrcaCoreSpec::pluginPageSend);
     });
   }
 

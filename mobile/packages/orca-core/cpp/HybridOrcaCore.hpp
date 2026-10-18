@@ -34,6 +34,12 @@ public:
                              bool granted) override;
   void setPluginEventListener(const std::function<void(const PluginEvent&)>& listener) override;
   void pluginAnswer(double requestId, const std::string& answer) override;
+  std::shared_ptr<Promise<std::string>> pluginPageHtml(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginPageIcon(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginPageOpen(const std::string& key, const std::string& capability) override;
+  void pluginPageClose(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginPageSend(const std::string& key, const std::string& capability,
+                                                       const std::string& messageJson) override;
 };
 
 } // namespace margelo::nitro::orca

@@ -34,6 +34,7 @@ if (ORCA_MOBILE_PLUGINS)
         core/plugin/CloudPluginServiceNull.cpp
         core/plugin/PluginHostAppMobile.cpp
         core/plugin/PluginHostUiMobile.cpp
+        core/plugin/PluginPages.cpp
         ${_plugin_dir}/PluginAuditManager.cpp
         ${_plugin_dir}/PluginConfig.cpp
         ${_plugin_dir}/PluginFsUtils.cpp

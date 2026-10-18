@@ -166,3 +166,82 @@ TEST_CASE("an event with no sink is unanswered and one with a sink gets the answ
     CHECK_FALSE(plugin_events::ask({"permission-request", "p", "", "{}"}, 10ms).has_value());
     plugin_events::set_sink(nullptr);
 }
+
+namespace {
+
+// A pages plugin whose page echoes every message back through post_message.
+const char* ECHO_PAGE_PLUGIN = R"PY(# /// script
+# requires-python = ">=3.12"
+#
+# [tool.orcaslicer.plugin]
+# name = "Echo Page"
+# description = "A page that echoes messages (test)."
+# author = "tests"
+# version = "0.1"
+# type = "pages"
+# ///
+import orca
+
+
+class EchoPage(orca.pages.PagesPluginCapabilityBase):
+    def get_name(self):
+        return "Echo"
+
+    def get_ui(self):
+        return "<html><body>echo</body></html>"
+
+    def on_message(self, data):
+        self.post_message({"echo": data})
+
+
+@orca.plugin
+class EchoPackage(orca.base):
+    def register_capabilities(self):
+        orca.register_capability(EchoPage)
+)PY";
+
+void install_echo_page(const fs::path& data_dir)
+{
+    const fs::path dir = data_dir / "orca_plugins" / "echo";
+    fs::create_directories(dir);
+    std::ofstream(dir / "echo_page.py") << ECHO_PAGE_PLUGIN;
+    std::ofstream((dir / ".install_state.json").string())
+        << json{{"installed_from", "local"}, {"installed_version", "0.1"}, {"plugin_name", "Echo Page"},
+                {"enabled", true}, {"permissions", json::object()}, {"capabilities", json::array()}}
+               .dump(2);
+}
+
+} // namespace
+
+TEST_CASE("a pages capability hands over its HTML and relays messages both ways", "[Plugins]")
+{
+    ScopedDataDir dir;
+    REQUIRE(start_runtime().empty());
+    install_echo_page(dir.path);
+    REQUIRE(Plugins::discover().empty());
+    const std::string key = find_plugin("Echo Page")["key"];
+    REQUIRE(Plugins::load(key).empty());
+
+    std::string error;
+    CHECK(Plugins::page_html(key, "Echo", error).find("echo") != std::string::npos);
+    CHECK(error.empty());
+    CHECK(Plugins::page_html(key, "no such page", error).empty());
+    CHECK_FALSE(error.empty());
+
+    std::vector<PluginEvent> events;
+    plugin_events::set_sink([&events](const PluginEvent& e) { events.push_back(e); });
+    REQUIRE(Plugins::page_open(key, "Echo").empty());
+    REQUIRE(Plugins::page_send(key, "Echo", R"({"spool": 3})").empty());
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].kind == "page-message");
+    CHECK(events[0].plugin_key == key);
+    CHECK(events[0].capability == "Echo");
+    CHECK(json::parse(events[0].payload_json) == json{{"echo", {{"spool", 3}}}});
+
+    // With the page closed the plugin can still post, but nobody listens.
+    Plugins::page_close(key, "Echo");
+    REQUIRE(Plugins::page_send(key, "Echo", "1").empty());
+    CHECK(events.size() == 1);
+    plugin_events::set_sink(nullptr);
+    REQUIRE(Plugins::unload(key));
+}

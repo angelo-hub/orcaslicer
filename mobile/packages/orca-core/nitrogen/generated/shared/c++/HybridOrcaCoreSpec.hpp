@@ -73,6 +73,11 @@ namespace margelo::nitro::orca {
       virtual bool pluginPermissionGrant(const std::string& key, const std::string& category, const std::string& target, bool granted) = 0;
       virtual void setPluginEventListener(const std::function<void(const PluginEvent& /* event */)>& listener) = 0;
       virtual void pluginAnswer(double requestId, const std::string& answer) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginPageHtml(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginPageIcon(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginPageOpen(const std::string& key, const std::string& capability) = 0;
+      virtual void pluginPageClose(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginPageSend(const std::string& key, const std::string& capability, const std::string& messageJson) = 0;
 
     protected:
       // Hybrid Setup

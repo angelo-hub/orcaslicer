@@ -80,6 +80,13 @@ export default function PluginsScreen(): React.JSX.Element {
   const store = usePluginStore()
   const entries = pluginEntries(store)
   const orphans = orphanedInstalls(store)
+  const pages = store.runtime.flatMap((plugin) =>
+    plugin.loaded
+      ? plugin.capabilities
+          .filter((cap) => cap.type === 'pages' && cap.enabled)
+          .map((cap) => ({ plugin, cap }))
+      : [],
+  )
 
   useEffect(() => {
     if (user !== null) void store.refresh()
@@ -143,6 +150,34 @@ export default function PluginsScreen(): React.JSX.Element {
           ))
         )}
       </Card>
+
+      {pages.length > 0 ? (
+        <Card title="Pages" subtitle="Screens the loaded plugins provide" padded={false} index={1}>
+          {pages.map(({ plugin, cap }, i) => (
+            <Pressable
+              key={`${plugin.key}/${cap.name}`}
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({
+                  pathname: '/plugins/page/[key]',
+                  params: { key: plugin.key, cap: cap.name, title: cap.name },
+                })
+              }
+              className={`flex-row items-center gap-3 px-4 py-3 active:bg-neutral-100 dark:active:bg-neutral-800 ${i === pages.length - 1 ? '' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+            >
+              <View className="flex-1">
+                <Text className="text-subhead font-medium text-neutral-900 dark:text-neutral-100">
+                  {cap.name}
+                </Text>
+                <Text className="mt-0.5 text-footnote text-neutral-500 dark:text-neutral-400">
+                  {plugin.name}
+                </Text>
+              </View>
+              <Icon name="chevron" size={16} />
+            </Pressable>
+          ))}
+        </Card>
+      ) : null}
 
       {orphans.length > 0 ? (
         <Card

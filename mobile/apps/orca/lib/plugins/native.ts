@@ -55,6 +55,25 @@ export async function rediscover(): Promise<string> {
   return error
 }
 
+type PageListener = (messageJson: string) => void
+const pageListeners = new Map<string, Set<PageListener>>()
+
+/** Messages a plugin posts to one of its pages, while a screen shows that page. */
+export function subscribePageMessages(
+  key: string,
+  capability: string,
+  fn: PageListener,
+): () => void {
+  const id = `${key}\n${capability}`
+  const set = pageListeners.get(id) ?? new Set<PageListener>()
+  set.add(fn)
+  pageListeners.set(id, set)
+  return () => {
+    set.delete(fn)
+    if (set.size === 0) pageListeners.delete(id)
+  }
+}
+
 export function nativePlugins(): NativePlugin[] {
   if (core === null || !initialized) return []
   return parseNativePlugins(core.pluginList())
@@ -160,6 +179,11 @@ function handleEvent(event: PluginEvent): void {
     case 'plugin-state':
       publish()
       return
+    case 'page-message': {
+      const set = pageListeners.get(`${event.pluginKey}\n${event.capability}`)
+      if (set !== undefined) for (const fn of set) fn(event.payloadJson)
+      return
+    }
     default:
       return
   }

@@ -93,4 +93,35 @@ void HybridOrcaCore::pluginAnswer(double requestId, const std::string& answer) {
   Plugins::answer(static_cast<long>(requestId), answer);
 }
 
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginPageHtml(const std::string& key,
+                                                                     const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() {
+    std::string error;
+    std::string html = Plugins::page_html(key, capability, error);
+    if (!error.empty()) throw std::runtime_error(error);
+    return html;
+  });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginPageIcon(const std::string& key,
+                                                                     const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() { return Plugins::page_icon(key, capability); });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginPageOpen(const std::string& key,
+                                                                     const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() { return Plugins::page_open(key, capability); });
+}
+
+void HybridOrcaCore::pluginPageClose(const std::string& key, const std::string& capability) {
+  Plugins::page_close(key, capability);
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginPageSend(const std::string& key,
+                                                                     const std::string& capability,
+                                                                     const std::string& messageJson) {
+  return Promise<std::string>::async(
+      [key, capability, messageJson]() { return Plugins::page_send(key, capability, messageJson); });
+}
+
 } // namespace margelo::nitro::orca
