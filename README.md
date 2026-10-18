@@ -21,6 +21,21 @@
 
 > **Unofficial.** Orca Mobile is not built, released or endorsed by the OrcaSlicer maintainers. Please report problems with the app [here](https://github.com/angelo-hub/orcaslicer/issues), not upstream. Everything that slices is upstream's work; if you support one project, [support OrcaSlicer](https://github.com/sponsors/SoftFever).
 
+## Install
+
+Orca Mobile runs on iPhone and iPad with iOS 16 or later, and installs through [AltStore](https://altstore.io) or [SideStore](https://sidestore.io).
+
+1. Set up AltStore ([guide](https://faq.altstore.io)) or SideStore on your device.
+2. On the device, tap **Download on AltStore** above. Or in AltStore open **Sources → +** and paste:
+   ```
+   https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/source.json
+   ```
+3. Install **Orca Mobile** from the source. Updates show up in AltStore when a new version is released.
+
+With a free Apple ID, AltStore has to refresh the app every 7 days. For the weekly beta, add `https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/source-beta.json` as well; it installs next to the stable app as **Orca Beta**. The `.ipa` files are also on the [releases page](https://github.com/angelo-hub/orcaslicer/releases).
+
+To build it yourself, or run it from Xcode on your own device, follow [`mobile/README.md`](mobile/README.md).
+
 <table align="center">
   <tr>
     <td align="center"><img src="docs/mobile/images/using-the-app/02-ios-prepare-pane.png" width="230" alt="The Prepare pane with a model on the plate"><br><sub>Prepare</sub></td>
@@ -44,17 +59,6 @@ The app links `libslic3r`, the engine behind desktop OrcaSlicer, through a thin 
 - Edit every print, filament and printer setting in the same parameter list as the desktop, run the calibration prints, and keep an eye on storage.
 
 The full list of what works, what is partial and what is not there (Bambu Lab printers, for one) is the matrix in [`mobile/README.md`](mobile/README.md#what-works-today).
-
-## Install
-
-Releases are ad-hoc signed `.ipa` files for [AltStore](https://altstore.io) or [SideStore](https://sidestore.io); add the source and install from there, or pick the `.ipa` from the [releases page](https://github.com/angelo-hub/orcaslicer/releases):
-
-```
-https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/source.json          stable
-https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/source-beta.json     weekly beta
-```
-
-To build it yourself, or run it from Xcode on your own device, follow [`mobile/README.md`](mobile/README.md).
 
 ## Guides
 
