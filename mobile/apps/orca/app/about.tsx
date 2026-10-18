@@ -1,7 +1,8 @@
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Linking, ScrollView, Text, View } from 'react-native'
+import { getOrcaCore } from 'react-native-orca-core'
 
 import { buildNumber, marketingVersion } from '@/lib/appInfo'
 import { Button } from '@/ui/Button'
@@ -32,10 +33,10 @@ const open = (url: string): void => {
 /** GitHub's "new issue" URL supports ?title=&body=. Pre-fill the environment
  * strip so users do not have to hand-type version / iOS build / device model
  * — the three fields a maintainer always asks for first. */
-function issueUrl(version: string, build: string): string {
+function issueUrl(version: string, build: string, engine: string): string {
   const platform = `iOS (Expo ${Constants.expoConfig?.sdkVersion ?? 'unknown'})`
   const app = `Orca Mobile ${version}${build === '' ? '' : ` (${build})`}`
-  const body = `\n\n---\nEnvironment (please leave this):\n- App: ${app}\n- Platform: ${platform}\n`
+  const body = `\n\n---\nEnvironment (please leave this):\n- App: ${app}\n- Engine: ${engine}\n- Platform: ${platform}\n`
   const params = new URLSearchParams({ title: '', body })
   return `${FORK_REPO}/issues/new?${params.toString()}`
 }
@@ -44,6 +45,16 @@ export default function AboutScreen(): React.JSX.Element {
   const router = useRouter()
   const version = marketingVersion
   const build = buildNumber
+  // The upstream release and commit compiled into the core, which the upstream sync
+  // records; the commit is what tells two builds of a -dev version apart.
+  const { engine, upstreamCommit } = useMemo(() => {
+    const core = getOrcaCore()
+    const commit = core.upstreamCommit
+    return {
+      engine: `OrcaSlicer ${core.version}${commit === '' ? '' : ` (${commit.slice(0, 10)})`}`,
+      upstreamCommit: commit,
+    }
+  }, [])
 
   return (
     <ScrollView
@@ -64,6 +75,16 @@ export default function AboutScreen(): React.JSX.Element {
         <Text className="text-subhead leading-5 text-neutral-600 dark:text-neutral-300">
           An unofficial iOS port of OrcaSlicer. It is not built, released or endorsed by the
           OrcaSlicer maintainers — please don&apos;t report problems with it to them.
+        </Text>
+        <Text
+          className="mt-2 text-subhead leading-5 text-neutral-500 dark:text-neutral-400"
+          onPress={
+            upstreamCommit === ''
+              ? undefined
+              : () => open(`${UPSTREAM_REPO}/commit/${upstreamCommit}`)
+          }
+        >
+          Based on {engine}
         </Text>
         <View className="mt-3 gap-2">
           <Button
@@ -139,7 +160,7 @@ export default function AboutScreen(): React.JSX.Element {
           <Button
             title="Report an issue"
             variant="secondary"
-            onPress={() => open(issueUrl(version, build))}
+            onPress={() => open(issueUrl(version, build, engine))}
           />
         </View>
       </Card>

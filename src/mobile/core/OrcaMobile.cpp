@@ -10,6 +10,11 @@ std::string core_version()
     return SoftFever_VERSION;
 }
 
+std::string upstream_commit()
+{
+    return ORCA_UPSTREAM_COMMIT;
+}
+
 void set_directories(const std::string& resources_dir, const std::string& data_dir)
 {
     set_resources_dir(resources_dir);
