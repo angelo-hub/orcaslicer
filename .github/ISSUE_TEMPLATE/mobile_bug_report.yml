@@ -1,0 +1,61 @@
+name: 📱 Mobile app bug report
+description: Something in the OrcaSlicer mobile app isn't working.
+labels: ["mobile", "bug"]
+projects: ["angelo-hub/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For the mobile app in `mobile/` only. Desktop OrcaSlicer bugs belong upstream in
+        [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/issues).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → About shows it, e.g. 0.2.0 (123).
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and iOS version
+      placeholder: iPhone 16 Pro, iOS 26.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - AltStore / SideStore
+        - AltStore PAL
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: printer
+    attributes:
+      label: Printer, if relevant
+      placeholder: Bambu Lab X1C, Qidi Q1 Pro, ...
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots, logs or the model
+      description: Drag files here. A .3mf that reproduces a slicing bug helps most.
