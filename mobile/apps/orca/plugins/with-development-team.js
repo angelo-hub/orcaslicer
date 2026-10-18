@@ -9,7 +9,7 @@
 // it in app.json is fine. APPLE_TEAM_ID overrides it, and with neither set the
 // plugin is a no-op: CI builds unsigned, and a contributor without access to
 // this team still gets a project that prebuilds.
-const { withXcodeProject } = require('@expo/config-plugins')
+const { withXcodeProject } = require('expo/config-plugins')
 
 module.exports = function withDevelopmentTeam(config, props) {
   const teamId = props?.appleTeamId ?? process.env.APPLE_TEAM_ID
