@@ -4,6 +4,10 @@
 name: Export macOS deps cache
 
 on:
+  # Pushes to this branch run the export directly, since GitHub only dispatches workflows that
+  # exist on the default branch.
+  push:
+    branches: [ci/export-macos-deps]
   workflow_dispatch:
     inputs:
       arch:
@@ -21,17 +25,17 @@ jobs:
       - name: Restore deps cache
         uses: actions/cache/restore@v6
         with:
-          path: ${{ github.workspace }}/deps/build/${{ inputs.arch }}
-          key: macos-${{ inputs.arch }}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }}
+          path: ${{ github.workspace }}/deps/build/${{ inputs.arch || 'arm64' }}
+          key: macos-${{ inputs.arch || 'arm64' }}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }}
           fail-on-cache-miss: true
 
       - name: Pack
         run: |
-          du -sh deps/build/${{ inputs.arch }}/OrcaSlicer_dep
-          tar -C deps/build -czf OrcaSlicer_dep_mac_${{ inputs.arch }}.tar.gz ${{ inputs.arch }}/OrcaSlicer_dep
+          du -sh deps/build/${{ inputs.arch || 'arm64' }}/OrcaSlicer_dep
+          tar -C deps/build -czf OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}.tar.gz ${{ inputs.arch || 'arm64' }}/OrcaSlicer_dep
 
       - uses: actions/upload-artifact@v7
         with:
-          name: OrcaSlicer_dep_mac_${{ inputs.arch }}
-          path: OrcaSlicer_dep_mac_${{ inputs.arch }}.tar.gz
+          name: OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}
+          path: OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}.tar.gz
           retention-days: 3
