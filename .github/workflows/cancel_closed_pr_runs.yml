@@ -1,0 +1,37 @@
+name: Cancel runs of closed PRs
+
+# Once a pull request is merged or closed, the runs still going on its branch only
+# burn minutes: the merge triggers its own runs on the base branch. macOS minutes are
+# the expensive ones here ("Build iOS core" takes hours, the IPA build ~15 minutes).
+#
+# Only branches of this repository are considered: a fork's branch name can match one
+# here, and its runs live in the fork anyway.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    name: Cancel branch runs
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel queued and running workflows on the head branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          for status in queued in_progress waiting pending requested; do
+            gh run list --branch "$BRANCH" --status "$status" --limit 100 \
+              --json databaseId,workflowName -q '.[] | "\(.databaseId)\t\(.workflowName)"'
+          done | sort -u | while IFS=$'\t' read -r id name; do
+            [ "$id" = "$GITHUB_RUN_ID" ] && continue
+            echo "Cancelling $name ($id)"
+            gh run cancel "$id" || echo "::warning::Could not cancel run $id"
+          done
