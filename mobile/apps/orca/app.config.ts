@@ -204,6 +204,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         'expo-widgets',
         {
+          // Spelled out, though they equal the plugin's fallbacks, so a plugin update
+          // cannot move them: a new app group loses the data the widget shares with
+          // the app, and both IDs are registered with Apple for signed builds.
+          bundleIdentifier: `${bundleIdentifier}.ExpoWidgetsTarget`,
+          groupIdentifier: `group.${bundleIdentifier}`,
           frequentUpdates: true,
           widgets: [
             {
