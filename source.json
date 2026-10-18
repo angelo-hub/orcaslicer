@@ -1,0 +1,46 @@
+{
+  "name": "OrcaSlicer Mobile",
+  "identifier": "io.github.angelohub.orcaslicer.source",
+  "subtitle": "OrcaSlicer on iPhone and iPad",
+  "description": "Builds of the OrcaSlicer mobile app, published from GitHub Actions.",
+  "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+  "tintColor": "#009688",
+  "featuredApps": [
+    "io.github.angelohub.orcaslicer"
+  ],
+  "apps": [
+    {
+      "name": "Orca Mobile",
+      "bundleIdentifier": "io.github.angelohub.orcaslicer",
+      "developerName": "OrcaSlicer contributors",
+      "subtitle": "Slice and send prints from your phone.",
+      "localizedDescription": "OrcaSlicer on iOS: import STL, 3MF, OBJ and STEP models, pick printer, filament and process presets from the OrcaSlicer profile library, slice on device and send the G-code to Moonraker or OctoPrint.",
+      "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+      "tintColor": "#009688",
+      "category": "utilities",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "0.2.0",
+          "buildVersion": "41",
+          "marketingVersion": "0.2.0",
+          "date": "2026-10-18T22:33:52.237Z",
+          "localizedDescription": "Features:\n• Show the OrcaSlicer version and commit the app is based on\n• Anti-alias the 3D viewport with 4x MSAA\n• Draw extrusions as beads at their real width in the preview\n\nFixes:\n• Depend on the Babel plugins NativeWind names so a device build can bundle\n• Pin the widget's bundle and app group identifiers\n• Depend on babel-preset-expo directly so a device build can bundle\n• Load config plugins through expo/config-plugins in a device build\n• Refuse to register a runner Mac whose Xcode is older than 26\n\nPerformance:\n• Store model meshes as positions only in the viewport\n• Scrub the toolpath preview without rebuilding its buffer",
+          "downloadURL": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.0/OrcaMobile-0.2.0.ipa",
+          "size": 31407070,
+          "minOSVersion": "16.4"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups",
+          "com.apple.developer.kernel.extended-virtual-addressing",
+          "com.apple.developer.kernel.increased-memory-limit"
+        ],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": [],
+  "nsfw": false
+}
