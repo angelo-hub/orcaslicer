@@ -1,0 +1,37 @@
+# One-off helper: restores the macOS deps cache that build_all.yml populates and uploads it as
+# an artifact, so a developer can unpack it into deps/build/<arch> instead of building deps
+# locally. Dispatch it from a branch whose deps/** matches the cached hash.
+name: Export macOS deps cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Architecture of the cached deps
+        type: choice
+        default: arm64
+        options: [arm64, x86_64]
+
+jobs:
+  export:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore deps cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/deps/build/${{ inputs.arch }}
+          key: macos-${{ inputs.arch }}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }}
+          fail-on-cache-miss: true
+
+      - name: Pack
+        run: |
+          du -sh deps/build/${{ inputs.arch }}/OrcaSlicer_dep
+          tar -C deps/build -czf OrcaSlicer_dep_mac_${{ inputs.arch }}.tar.gz ${{ inputs.arch }}/OrcaSlicer_dep
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OrcaSlicer_dep_mac_${{ inputs.arch }}
+          path: OrcaSlicer_dep_mac_${{ inputs.arch }}.tar.gz
+          retention-days: 3
