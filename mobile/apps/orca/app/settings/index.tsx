@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 
 import { useCloudStore } from '@/lib/cloud/store'
 import { useCore } from '@/lib/core'
+import { usePluginsEnabled } from '@/lib/flags'
 import { pickAndImportPresets } from '@/lib/presetFiles'
 import { relativeTime } from '@/lib/time'
 import { Card } from '@/ui/Card'
@@ -53,6 +54,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter()
   const { session, reloadPresets } = useCore()
   const { user, status, lastSyncAt, lastError } = useCloudStore()
+  const plugins = usePluginsEnabled()
 
   const accountLine =
     user === null
@@ -104,7 +106,23 @@ export default function SettingsScreen(): React.JSX.Element {
         />
       </Card>
 
-      <Card title="App" padded={false} index={2}>
+      {plugins ? (
+        <Card title="Plugins" padded={false} index={2}>
+          <Row
+            icon="cloud"
+            title="Orca Cloud plugins"
+            subtitle={
+              user === null
+                ? 'Sign in to see your subscriptions'
+                : 'Subscriptions and what is installed here'
+            }
+            onPress={() => router.push('/plugins')}
+            last
+          />
+        </Card>
+      ) : null}
+
+      <Card title="App" padded={false} index={plugins ? 3 : 2}>
         <Row
           icon="help"
           title="Help"

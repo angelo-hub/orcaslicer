@@ -260,6 +260,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.extra,
       variant,
       marketingVersion: process.env.APP_MARKETING_VERSION ?? version,
+      // Feature flags, read by lib/flags.ts. Off unless the build says otherwise.
+      plugins: process.env.EXPO_PUBLIC_ORCA_PLUGINS === '1',
     },
   }
 }
