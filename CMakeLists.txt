@@ -119,6 +119,7 @@ option(ORCA_BUILD_PYTHON_STUBGEN_MODULE "Build importable Python module for pybi
 # Mobile core: libslic3r plus the façade in src/mobile, as a static library for a
 # React Native app. No GUI, CLI, Python runtime, tools or tests. See docs/HLSD/mobile.md.
 option(ORCA_MOBILE "Build only the slicing core and the mobile façade" OFF)
+option(ORCA_MOBILE_PLUGINS "Embed the Python plugin runtime in the mobile core" OFF)
 if (ORCA_MOBILE)
     set(SLIC3R_GUI 0 CACHE BOOL "" FORCE)
     # A mobile OS only takes static libraries. A desktop host building the core for
@@ -942,8 +943,8 @@ endforeach()
 
 find_package(NLopt 1.4 REQUIRED)
 
-# The embedded Python runtime is a GUI feature; the mobile core ships none.
-if (NOT ORCA_MOBILE)
+# The embedded Python runtime is a GUI feature; the mobile core ships it only on request.
+if (NOT ORCA_MOBILE OR ORCA_MOBILE_PLUGINS)
 # Use bundled Python from deps instead of system Python
 set(_bundled_python_version "3.12.13")
 set(_bundled_python_abi "312")
@@ -1023,7 +1024,7 @@ add_library(pybind11_embed INTERFACE)
 target_link_libraries(pybind11_embed INTERFACE pybind11_headers Python3::Python)
 target_compile_definitions(pybind11_embed INTERFACE PYBIND11_SIMPLE_GIL_MANAGEMENT)
 add_library(pybind11::embed ALIAS pybind11_embed)
-endif() # NOT ORCA_MOBILE
+endif() # NOT ORCA_MOBILE OR ORCA_MOBILE_PLUGINS
 
 
 if(SLIC3R_STATIC)

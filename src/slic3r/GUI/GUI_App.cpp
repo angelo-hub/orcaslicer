@@ -81,6 +81,9 @@
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/Color.hpp"
 #include "slic3r/plugin/PluginManager.hpp"
+#include "slic3r/plugin/PluginAuditManager.hpp"
+#include "slic3r/plugin/PluginConfig.hpp"
+#include "slic3r/GUI/PluginPermissionPrompt.hpp"
 #include "slic3r/plugin/host/PluginHostUi.hpp"
 #include "slic3r/plugin/PythonInterpreter.hpp"
 
@@ -2794,6 +2797,32 @@ std::string get_system_info()
 void GUI_App::init_plugin_gui_wiring()
 {
     PluginManager& plugin_mgr = PluginManager::instance();
+
+    // The seams the plugin host leaves to its application: where lifecycle callbacks run
+    // (wx subscribers need the main thread), how a permission request reaches the user, which
+    // preset bundle carries per-preset plugin config, and how a failed cloud fetch is reported.
+    PluginManager::set_main_thread_dispatcher([](std::function<void()> work) {
+        if (wxTheApp == nullptr || wxIsMainThread())
+            work();
+        else
+            wxGetApp().CallAfter(std::move(work));
+    });
+    PluginAuditManager::set_permission_prompt(prompt_plugin_permission);
+    set_active_preset_bundle_fn([]() -> const PresetBundle* { return wxTheApp == nullptr ? nullptr : wxGetApp().preset_bundle; });
+    PluginManager::set_cloud_fetch_failed_fn([] {
+        if (wxTheApp == nullptr)
+            return;
+        wxGetApp().CallAfter([] {
+            if (wxGetApp().is_closing())
+                return;
+            Plater* plater = wxGetApp().plater();
+            if (plater == nullptr || wxGetApp().imgui() == nullptr || !wxGetApp().imgui()->display_initialized())
+                return;
+            plater->get_notification_manager()->push_notification(NotificationType::CustomNotification,
+                                                                  NotificationManager::NotificationLevel::WarningNotificationLevel,
+                                                                  "Failed to fetch plugins from the cloud. See logs for details.");
+        });
+    });
 
     auto refresh_plugins_dialog = [] {
         if (!wxTheApp)

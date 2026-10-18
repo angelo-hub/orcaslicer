@@ -125,6 +125,10 @@ set(SLIC3R_GUI_SOURCES
     GUI/PluginPickerDialog.hpp
     GUI/PluginsDialog.cpp
     GUI/PluginsDialog.hpp
+    GUI/PluginPermissionPrompt.cpp
+    GUI/PluginPermissionPrompt.hpp
+    GUI/PluginConfigResponses.cpp
+    GUI/PluginConfigResponses.hpp
     GUI/SpeedDialDialog.cpp
     GUI/SpeedDialDialog.hpp
     GUI/ActionRegistry.cpp
@@ -728,6 +732,7 @@ set(SLIC3R_GUI_SOURCES
     Utils/IPrinterAgent.hpp
     Utils/OrcaCloudServiceAgent.cpp
     Utils/OrcaCloudServiceAgent.hpp
+    Utils/SecretConstants.hpp
     Utils/OrcaPrinterAgent.cpp
     Utils/OrcaPrinterAgent.hpp
     Utils/QidiPrinterAgent.cpp

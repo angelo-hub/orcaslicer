@@ -99,8 +99,16 @@ class PluginManager
 public:
     using PluginLifecycleCompleteFn = std::function<void(const std::string& /*plugin_key*/)>;
     using CapabilityLifecycleFn     = std::function<void(const PluginCapabilityId&)>;
+    using DispatchFn                = std::function<void(std::function<void()>)>;
 
     static PluginManager& instance();
+
+    // Where lifecycle callbacks run. Desktop subscribers touch wx, so GUI_App installs a
+    // dispatcher that hops to the main thread; with none installed a callback runs inline on
+    // the worker that finished the load or unload (the unit tests, a headless host).
+    static void set_main_thread_dispatcher(DispatchFn fn);
+    // Called when fetch_plugins_from_cloud cannot reach the cloud, so the host can tell the user.
+    static void set_cloud_fetch_failed_fn(std::function<void()> fn);
 
     ~PluginManager();
 
@@ -245,6 +253,10 @@ private:
     void release_load_slot(const std::string& plugin_key);
     void cancel_and_wait_for_capabilities(
         const std::vector<std::shared_ptr<PluginCapabilityInterface>>& capabilities);
+
+    static void dispatch_on_main(std::function<void()> work);
+    static DispatchFn            s_main_thread_dispatcher;
+    static std::function<void()> s_cloud_fetch_failed;
 
     // Snapshot subscribers under m_mutex so they can be invoked without holding it.
     std::vector<PluginLifecycleCompleteFn> copy_callbacks(CallbackType type) const;

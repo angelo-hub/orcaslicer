@@ -19,6 +19,8 @@ void CloudPluginService::set_cloud_agent(std::shared_ptr<OrcaCloudServiceAgent> 
 
 std::shared_ptr<OrcaCloudServiceAgent> CloudPluginService::get_cloud_agent() const { return m_orca_agent; }
 
+std::string CloudPluginService::cloud_user_id() const { return m_orca_agent ? m_orca_agent->get_user_id() : std::string(); }
+
 bool CloudPluginService::can_fetch_cloud_plugins() const
 {
     if (!m_orca_agent) {

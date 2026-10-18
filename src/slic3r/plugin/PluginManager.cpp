@@ -9,10 +9,7 @@
 #include "PythonInterpreter.hpp"
 #include "PythonPluginBridge.hpp"
 
-#include "OrcaCloudServiceAgent.hpp"
 #include "libslic3r/Semver.hpp"
-#include "slic3r/GUI/GUI_App.hpp"
-#include "slic3r/GUI/NotificationManager.hpp"
 
 #include <boost/filesystem.hpp>
 #include <boost/log/trivial.hpp>
@@ -539,11 +536,7 @@ std::string PluginManager::get_storage_dir(const std::string& plugin_key) const
         return local_storage_dir.string();
     }
 
-    auto agent = m_cloud_service.get_cloud_agent();
-    if (!agent)
-        throw std::runtime_error("Cloud plugin storage is unavailable before networking is initialized");
-
-    const std::string user_id = agent->get_user_id();
+    const std::string user_id = m_cloud_service.cloud_user_id();
     if (user_id.empty())
         throw std::runtime_error("Cloud plugin storage is unavailable without a logged-in user");
 
@@ -1244,12 +1237,25 @@ std::vector<PluginManager::CapabilityLifecycleFn> PluginManager::copy_capability
     return it == m_capability_callbacks.end() ? std::vector<CapabilityLifecycleFn>{} : it->second;
 }
 
+PluginManager::DispatchFn    PluginManager::s_main_thread_dispatcher;
+std::function<void()>        PluginManager::s_cloud_fetch_failed;
+
+void PluginManager::set_main_thread_dispatcher(DispatchFn fn) { s_main_thread_dispatcher = std::move(fn); }
+void PluginManager::set_cloud_fetch_failed_fn(std::function<void()> fn) { s_cloud_fetch_failed = std::move(fn); }
+
+void PluginManager::dispatch_on_main(std::function<void()> work)
+{
+    if (s_main_thread_dispatcher)
+        s_main_thread_dispatcher(std::move(work));
+    else
+        work();
+}
+
 // The run_on_*_callbacks below are called from detached load/unload workers. They snapshot the
 // subscriber list under m_mutex (the copy protects the in-flight loop from a callback that
 // subscribes mid-dispatch, and serialises against a concurrent subscribe), then hand the snapshot
-// to the UI thread: subscribers touch wx and must not run on a worker, and none may run while the
-// registry lock is held. The dispatch runs inline when already on the UI thread, else via
-// CallAfter, since calling wx off the main thread is UB.
+// to the host's dispatcher: desktop subscribers touch wx and must not run on a worker, and none
+// may run while the registry lock is held.
 void PluginManager::run_on_load_callbacks(const std::string& plugin_key)
 {
     auto work = [callbacks = copy_callbacks(CallbackType::Load), plugin_key] {
@@ -1263,10 +1269,7 @@ void PluginManager::run_on_load_callbacks(const std::string& plugin_key)
             }
         }
     };
-    if (wxTheApp == nullptr || wxIsMainThread())
-        work();
-    else
-        GUI::wxGetApp().CallAfter(std::move(work));
+    dispatch_on_main(std::move(work));
 }
 
 void PluginManager::run_on_unload_callbacks(const std::string& plugin_key)
@@ -1282,10 +1285,7 @@ void PluginManager::run_on_unload_callbacks(const std::string& plugin_key)
             }
         }
     };
-    if (wxTheApp == nullptr || wxIsMainThread())
-        work();
-    else
-        GUI::wxGetApp().CallAfter(std::move(work));
+    dispatch_on_main(std::move(work));
 }
 
 void PluginManager::run_on_capability_load_callbacks(const PluginCapabilityId& id)
@@ -1302,10 +1302,7 @@ void PluginManager::run_on_capability_load_callbacks(const PluginCapabilityId& i
             }
         }
     };
-    if (wxTheApp == nullptr || wxIsMainThread())
-        work();
-    else
-        GUI::wxGetApp().CallAfter(std::move(work));
+    dispatch_on_main(std::move(work));
 }
 
 void PluginManager::run_on_capability_unload_callbacks(const PluginCapabilityId& id)
@@ -1322,10 +1319,7 @@ void PluginManager::run_on_capability_unload_callbacks(const PluginCapabilityId&
             }
         }
     };
-    if (wxTheApp == nullptr || wxIsMainThread())
-        work();
-    else
-        GUI::wxGetApp().CallAfter(std::move(work));
+    dispatch_on_main(std::move(work));
 }
 
 // ── Cloud user ──────────────────────────────────────────────────────────────────────────────
@@ -1558,20 +1552,8 @@ void PluginManager::fetch_plugins_from_cloud(std::vector<std::string>* out_not_f
     std::vector<PluginDescriptor> cloud_list{};
     std::vector<std::string> not_found{}, unauthorized{};
     const bool cloud_fetch_succeeded = m_cloud_service.fetch_manifests_into_descriptors(cloud_list, not_found, unauthorized);
-    if (!cloud_fetch_succeeded) {
-        if (wxTheApp != nullptr) {
-            GUI::wxGetApp().CallAfter([] {
-                if (GUI::wxGetApp().is_closing())
-                    return;
-                GUI::Plater* plater = GUI::wxGetApp().plater();
-                if (plater == nullptr || GUI::wxGetApp().imgui() == nullptr || !GUI::wxGetApp().imgui()->display_initialized())
-                    return;
-                plater->get_notification_manager()->push_notification(GUI::NotificationType::CustomNotification,
-                                                                      GUI::NotificationManager::NotificationLevel::WarningNotificationLevel,
-                                                                      "Failed to fetch plugins from the cloud. See logs for details.");
-            });
-        }
-    }
+    if (!cloud_fetch_succeeded && s_cloud_fetch_failed)
+        s_cloud_fetch_failed();
 
     if (cloud_fetch_succeeded)
         update_cloud_metadata(cloud_list);
@@ -1693,11 +1675,8 @@ bool PluginManager::download_and_install_cloud_plugin(const std::string& plugin_
     }
 
     // Ensure cloud plugins install to _subscribed/<user_id>/
-    if (auto agent = m_cloud_service.get_cloud_agent()) {
-        const std::string user_id = agent->get_user_id();
-        if (!user_id.empty())
-            set_cloud_user(user_id);
-    }
+    if (const std::string user_id = m_cloud_service.cloud_user_id(); !user_id.empty())
+        set_cloud_user(user_id);
 
     // Record the version we just fetched from the cloud so install_plugin persists it to the
     // install-state sidecar (the source of truth for the installed cloud version) instead of the

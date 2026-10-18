@@ -3,6 +3,7 @@
 
 // Via pybind11 so this file requests the same python3xx.lib as everything else.
 #include <pybind11/conduit/wrap_include_python_h.h>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -47,6 +48,18 @@ enum class AuditEventCategory {
     Threading,
 };
 
+// What a plugin is asking the user to allow: the paths, hosts or commands the stored permissions
+// do not already cover. The host installs the prompt (a modal dialog on the desktop) and owns
+// the hop to its UI thread; without one every request is denied.
+struct PluginPermissionRequest {
+    std::string              plugin_key;
+    std::string              plugin_name;
+    std::string              event_name; // The CPython audit event, e.g. "open".
+    AuditEventCategory       category = AuditEventCategory::None;
+    std::vector<std::string> targets;
+};
+using PluginPermissionPromptFn = std::function<bool(const PluginPermissionRequest&)>;
+
 // Returns true if candidate resolves to a path inside allowed_root.
 // Uses weakly_canonical and component-wise comparison to reject traversal attacks.
 bool is_inside_allowed_root(const boost::filesystem::path& candidate,
@@ -59,6 +72,10 @@ public:
 
     // Call once after Py_Initialize to install the global audit hook.
     void install_hook();
+
+    static void set_permission_prompt(PluginPermissionPromptFn fn);
+    // Asks the installed prompt; false when none is installed.
+    static bool prompt_permission(const PluginPermissionRequest& request);
 
     // --- current-plugin context (thread_local) ---
     void        set_current_plugin(const std::string& plugin_key);
@@ -132,8 +149,7 @@ public:
     AuditDecision check_path_access(const boost::filesystem::path& candidate, bool is_write);
     AuditDecision check_open(const std::string& path, const std::string& mode);
 
-    // Ask the user to grant the requested filesystem-read paths. The request may originate on a
-    // plugin load worker, so the implementation marshals the modal dialog to the wx main thread.
+    // Ask the user to grant the requested filesystem-read paths through the installed prompt.
     // Returns true only when every missing path was granted and persisted; denial aborts the plugin
     // load without adding a permission.
     bool request_filesystem_read_permissions(const std::string& plugin_key,
@@ -164,6 +180,7 @@ private:
 
     static int audit_hook(const char* event, PyObject* args, void* user_data);
 
+    static PluginPermissionPromptFn                    s_permission_prompt;
     static thread_local std::string                   m_current_plugin_key;
     static thread_local std::string                   m_current_capability_name;
     static thread_local std::vector<AllowedRoot>       m_scoped_allowed_roots;
