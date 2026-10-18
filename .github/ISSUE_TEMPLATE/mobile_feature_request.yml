@@ -1,0 +1,45 @@
+name: 📱 Mobile app feature request
+description: Suggest something for the OrcaSlicer mobile app.
+labels: ["mobile", "enhancement"]
+projects: ["angelo-hub/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For the mobile app in `mobile/` only. Requests for desktop OrcaSlicer belong upstream in
+        [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/issues).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or problem, in your own words. What gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like the app to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds or alternatives you've tried
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Slicing and presets
+        - 3D viewport and preview
+        - Printers and sending prints
+        - Files and import
+        - Widgets and notifications
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Screenshots, mock-ups, or how desktop OrcaSlicer handles it.
