@@ -38,5 +38,18 @@ std::string run_script(const std::string&, const std::string&)
     return std::string("{\"status\":\"fatal_error\",\"message\":\"\",\"data\":\"\",\"error\":\"") + NOT_SUPPORTED + "\"}";
 }
 void post_process_gcode(const std::string&, const std::string&, const DynamicPrintConfig&) {}
+std::string agent_info(const std::string&, const std::string&)
+{
+    return std::string("{\"error\":\"") + NOT_SUPPORTED + "\"}";
+}
+std::string agent_connect(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&,
+                          const std::string&, bool)
+{
+    return NOT_SUPPORTED;
+}
+std::string agent_disconnect(const std::string&, const std::string&) { return NOT_SUPPORTED; }
+std::string agent_send(const std::string&, const std::string&, const std::string&, const std::string&) { return NOT_SUPPORTED; }
+std::string agent_print(const std::string&, const std::string&, const std::string&) { return NOT_SUPPORTED; }
+void        agent_cancel_print(const std::string&, const std::string&) {}
 
 }}} // namespace Slic3r::Mobile::Plugins

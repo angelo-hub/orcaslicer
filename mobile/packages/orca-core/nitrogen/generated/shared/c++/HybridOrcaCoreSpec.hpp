@@ -80,6 +80,12 @@ namespace margelo::nitro::orca {
       virtual std::shared_ptr<Promise<std::string>> pluginPageSend(const std::string& key, const std::string& capability, const std::string& messageJson) = 0;
       virtual std::string pluginCheckRefs(const std::string& refsJson) = 0;
       virtual std::shared_ptr<Promise<std::string>> pluginRunScript(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginAgentInfo(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginAgentConnect(const std::string& key, const std::string& capability, const std::string& devId, const std::string& devIp, const std::string& username, const std::string& password, bool useSsl) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginAgentDisconnect(const std::string& key, const std::string& capability) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginAgentSend(const std::string& key, const std::string& capability, const std::string& devId, const std::string& messageJson) = 0;
+      virtual std::shared_ptr<Promise<std::string>> pluginAgentPrint(const std::string& key, const std::string& capability, const std::string& paramsJson) = 0;
+      virtual void pluginAgentCancelPrint(const std::string& key, const std::string& capability) = 0;
 
     protected:
       // Hybrid Setup

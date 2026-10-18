@@ -3,7 +3,13 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 
-import { clientFor, loadPrinters, type PrinterHost, type PrinterStatus } from '@/lib/printers'
+import {
+  clientFor,
+  kindLabel,
+  loadPrinters,
+  type PrinterHost,
+  type PrinterStatus,
+} from '@/lib/printers'
 import { queryKeys } from '@/lib/queries'
 import { Alert as InlineAlert } from '@/ui/Alert'
 import { Button } from '@/ui/Button'
@@ -206,7 +212,7 @@ export default function HostDetailScreen(): React.JSX.Element {
           </Text>
           <Text className="mt-2 text-footnote text-neutral-500 dark:text-neutral-400">Kind</Text>
           <Text className="text-subhead text-neutral-900 dark:text-neutral-100">
-            {host.kind === 'moonraker' ? 'Klipper (Moonraker)' : 'OctoPrint'}
+            {kindLabel(host.kind)}
           </Text>
         </Card>
       </ScrollView>

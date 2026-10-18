@@ -432,4 +432,29 @@ export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   pluginCheckRefs(refsJson: string): string
   /** Runs a script capability. Resolves to JSON {status, message, data, error}. */
   pluginRunScript(key: string, capability: string): Promise<string>
+
+  // A loaded printer-connection capability, for lib/printers/plugin.ts. The plugin owns
+  // the connection; its messages arrive as 'agent-message' events ({dev_id, message}) and
+  // a print's progress as 'agent-print' events. Each resolves to an error, or ''.
+  /** Resolves to JSON {id, name, version, description}, or {error}. */
+  pluginAgentInfo(key: string, capability: string): Promise<string>
+  pluginAgentConnect(
+    key: string,
+    capability: string,
+    devId: string,
+    devIp: string,
+    username: string,
+    password: string,
+    useSsl: boolean,
+  ): Promise<string>
+  pluginAgentDisconnect(key: string, capability: string): Promise<string>
+  pluginAgentSend(
+    key: string,
+    capability: string,
+    devId: string,
+    messageJson: string,
+  ): Promise<string>
+  /** Starts a local print and resolves when the plugin's upload returns; see Plugins::agent_print for the JSON. */
+  pluginAgentPrint(key: string, capability: string, paramsJson: string): Promise<string>
+  pluginAgentCancelPrint(key: string, capability: string): void
 }

@@ -136,6 +136,42 @@ export async function runScript(key: string, capability: string): Promise<Script
   return parseScriptResult(await core.pluginRunScript(key, capability))
 }
 
+type AgentListener = (devId: string, message: string) => void
+const agentListeners = new Map<string, Set<AgentListener>>()
+
+/** What a printer-connection plugin reports through its message callback. */
+export function subscribeAgentMessages(
+  key: string,
+  capability: string,
+  fn: AgentListener,
+): () => void {
+  const id = `${key}\n${capability}`
+  const set = agentListeners.get(id) ?? new Set<AgentListener>()
+  set.add(fn)
+  agentListeners.set(id, set)
+  return () => {
+    set.delete(fn)
+    if (set.size === 0) agentListeners.delete(id)
+  }
+}
+
+export interface LoadedAgent {
+  key: string
+  capability: string
+  pluginName: string
+}
+
+/** The printer-connection capabilities loaded right now. */
+export function loadedPrinterAgents(): LoadedAgent[] {
+  return nativePlugins().flatMap((p) =>
+    p.loaded
+      ? p.capabilities
+          .filter((c) => c.type === 'printer-connection' && c.enabled)
+          .map((c) => ({ key: p.key, capability: c.name, pluginName: p.name }))
+      : [],
+  )
+}
+
 export function nativePlugins(): NativePlugin[] {
   if (core === null || !initialized) return []
   return parseNativePlugins(core.pluginList())
@@ -244,6 +280,19 @@ function handleEvent(event: PluginEvent): void {
     case 'page-message': {
       const set = pageListeners.get(`${event.pluginKey}\n${event.capability}`)
       if (set !== undefined) for (const fn of set) fn(event.payloadJson)
+      return
+    }
+    case 'agent-message': {
+      const set = agentListeners.get(`${event.pluginKey}\n${event.capability}`)
+      if (set === undefined) return
+      const devId = String(data.dev_id ?? '')
+      const message = String(data.message ?? '')
+      for (const fn of set) fn(devId, message)
+      return
+    }
+    case 'agent-print': {
+      const message = String(data.message ?? '')
+      if (message !== '') showToast(message)
       return
     }
     default:

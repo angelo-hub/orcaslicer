@@ -42,6 +42,17 @@ public:
                                                        const std::string& messageJson) override;
   std::string pluginCheckRefs(const std::string& refsJson) override;
   std::shared_ptr<Promise<std::string>> pluginRunScript(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginAgentInfo(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginAgentConnect(const std::string& key, const std::string& capability,
+                                                           const std::string& devId, const std::string& devIp,
+                                                           const std::string& username, const std::string& password,
+                                                           bool useSsl) override;
+  std::shared_ptr<Promise<std::string>> pluginAgentDisconnect(const std::string& key, const std::string& capability) override;
+  std::shared_ptr<Promise<std::string>> pluginAgentSend(const std::string& key, const std::string& capability,
+                                                        const std::string& devId, const std::string& messageJson) override;
+  std::shared_ptr<Promise<std::string>> pluginAgentPrint(const std::string& key, const std::string& capability,
+                                                         const std::string& paramsJson) override;
+  void pluginAgentCancelPrint(const std::string& key, const std::string& capability) override;
 };
 
 } // namespace margelo::nitro::orca

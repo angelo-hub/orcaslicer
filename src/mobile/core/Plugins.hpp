@@ -78,6 +78,21 @@ std::string check_preset_refs(const std::string& refs_json);
 // "success", "skipped", "recoverable_error" or "fatal_error".
 std::string run_script(const std::string& key, const std::string& capability);
 
+// A loaded printer-connection capability, driven through the operations the app's
+// printer client needs. The plugin owns the connection: what it reports through its
+// message callback arrives as agent-message events ({dev_id, message}), a print's
+// progress as agent-print events ({status, code, message}). Errors come back as
+// strings, empty for success.
+std::string agent_info(const std::string& key, const std::string& capability); // JSON {id,name,version,description} or {error}
+std::string agent_connect(const std::string& key, const std::string& capability, const std::string& dev_id,
+                          const std::string& dev_ip, const std::string& username, const std::string& password, bool use_ssl);
+std::string agent_disconnect(const std::string& key, const std::string& capability);
+std::string agent_send(const std::string& key, const std::string& capability, const std::string& dev_id, const std::string& message_json);
+// Starts a local print; blocks while the plugin uploads. params_json: {dev_id, dev_name, dev_ip,
+// username, password, use_ssl, filename, dst_file, task_name, project_name, plate_index, ...}.
+std::string agent_print(const std::string& key, const std::string& capability, const std::string& params_json);
+void        agent_cancel_print(const std::string& key, const std::string& capability);
+
 // A loaded pages capability, shown by the app in a web view. The page talks to the
 // plugin through page_send (the plugin's on_message) and, once page_open installed the
 // sender, the plugin's post_message arrives as a page-message event whose payload is the

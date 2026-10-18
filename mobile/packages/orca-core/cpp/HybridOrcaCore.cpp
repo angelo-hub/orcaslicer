@@ -133,4 +133,44 @@ std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginRunScript(const std:
   return Promise<std::string>::async([key, capability]() { return Plugins::run_script(key, capability); });
 }
 
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginAgentInfo(const std::string& key,
+                                                                      const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() { return Plugins::agent_info(key, capability); });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginAgentConnect(const std::string& key,
+                                                                         const std::string& capability,
+                                                                         const std::string& devId,
+                                                                         const std::string& devIp,
+                                                                         const std::string& username,
+                                                                         const std::string& password, bool useSsl) {
+  return Promise<std::string>::async([=]() {
+    return Plugins::agent_connect(key, capability, devId, devIp, username, password, useSsl);
+  });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginAgentDisconnect(const std::string& key,
+                                                                            const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() { return Plugins::agent_disconnect(key, capability); });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginAgentSend(const std::string& key,
+                                                                      const std::string& capability,
+                                                                      const std::string& devId,
+                                                                      const std::string& messageJson) {
+  return Promise<std::string>::async(
+      [key, capability, devId, messageJson]() { return Plugins::agent_send(key, capability, devId, messageJson); });
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginAgentPrint(const std::string& key,
+                                                                       const std::string& capability,
+                                                                       const std::string& paramsJson) {
+  return Promise<std::string>::async(
+      [key, capability, paramsJson]() { return Plugins::agent_print(key, capability, paramsJson); });
+}
+
+void HybridOrcaCore::pluginAgentCancelPrint(const std::string& key, const std::string& capability) {
+  Plugins::agent_cancel_print(key, capability);
+}
+
 } // namespace margelo::nitro::orca

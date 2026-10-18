@@ -1,17 +1,32 @@
-// Printer hosts the app can send G-code to. Both speak plain HTTP, so they live in the
-// app rather than in the native core.
+// Printer hosts the app can send G-code to. Moonraker and OctoPrint speak plain HTTP, so
+// they live in the app; a plugin host is a printer-connection plugin the core's runtime
+// drives (lib/printers/plugin.ts).
 
-export type PrinterHostKind = 'moonraker' | 'octoprint'
+export type PrinterHostKind = 'moonraker' | 'octoprint' | 'plugin'
+
+export interface PluginHostRef {
+  /** The plugin's key (its cloud uuid) and the capability name. */
+  key: string
+  capability: string
+  /** The printer's id as the plugin knows it (a serial number, say). */
+  devId: string
+}
 
 export interface PrinterHost {
   /** Stable id, generated when the printer is added. */
   id: string
   name: string
   kind: PrinterHostKind
-  /** Base URL including scheme, e.g. http://voron.local or http://192.168.1.20:7125. */
+  /** Base URL including scheme, e.g. http://voron.local or http://192.168.1.20:7125. For a
+   * plugin host, the printer's address as the plugin wants it. */
   url: string
-  /** Moonraker: optional API key. OctoPrint: required application key. */
+  /** Moonraker: optional API key. OctoPrint: required application key. Plugin: the password
+   * or access code the plugin connects with. */
   apiKey?: string
+  /** Plugin: the user name the plugin connects with, when it needs one. */
+  username?: string
+  /** Set when kind is 'plugin'. */
+  plugin?: PluginHostRef
 }
 
 export type SensorKind = 'nozzle' | 'bed' | 'chamber' | 'toolhead' | 'mcu' | 'fan' | 'other'

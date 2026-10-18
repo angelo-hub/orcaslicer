@@ -37,6 +37,7 @@ if (ORCA_MOBILE_PLUGINS)
         core/plugin/PluginPages.cpp
         core/plugin/PluginPipeline.cpp
         core/plugin/PluginPipeline.hpp
+        core/plugin/PluginPrinterAgent.cpp
         ${_plugin_dir}/PluginAuditManager.cpp
         ${_plugin_dir}/PluginConfig.cpp
         ${_plugin_dir}/PluginFsUtils.cpp

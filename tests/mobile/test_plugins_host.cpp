@@ -283,3 +283,117 @@ TEST_CASE("the G-code step runs the preset's slicing-pipeline plugin on the expo
     CHECK(json::parse(Plugins::check_preset_refs(R"([{"name":")" + key + R"(","uuid":"","capability":"G-code Stamp"}])"))[0]["state"] ==
           "installed");
 }
+
+namespace {
+
+// A printer-connection plugin that answers the few operations the app drives: it keeps the
+// message callback, echoes an idle report through it on every send, and reports progress
+// once per print.
+const char* ECHO_AGENT_PLUGIN = R"PY(# /// script
+# requires-python = ">=3.12"
+#
+# [tool.orcaslicer.plugin]
+# name = "Echo Agent"
+# description = "A printer connection that echoes (test)."
+# author = "tests"
+# version = "0.1"
+# type = "printer-connection"
+# ///
+import orca
+
+
+class EchoAgent(orca.printer_agent.PrinterAgentBase):
+    def __init__(self):
+        super().__init__()
+        self.on_message = None
+
+    def get_name(self):
+        return "Echo"
+
+    def get_agent_info(self):
+        info = orca.printer_agent.AgentInfo()
+        info.id = "echo"
+        info.name = "Echo agent"
+        info.version = "0.1"
+        info.description = "test"
+        return info
+
+    def connect_printer(self, dev_id, dev_ip, username, password, use_ssl):
+        return 0 if dev_ip else 1
+
+    def disconnect_printer(self):
+        return 0
+
+    def set_queue_on_main_fn(self, fn):
+        return 0
+
+    def set_on_message_fn(self, fn):
+        self.on_message = fn
+        return 0
+
+    def set_on_local_message_fn(self, fn):
+        return 0
+
+    def send_message_to_printer(self, dev_id, json_str, qos, flag):
+        if self.on_message is not None:
+            self.on_message(dev_id, '{"print": {"gcode_state": "IDLE", "echo": ' + json_str + '}}')
+        return 0
+
+    def start_local_print(self, params, update_fn, cancel_fn):
+        update_fn(0, 0, "uploaded " + params.filename)
+        return 0 if not cancel_fn() else 2
+
+
+@orca.plugin
+class EchoAgentPackage(orca.base):
+    def register_capabilities(self):
+        orca.register_capability(EchoAgent)
+)PY";
+
+void install_echo_agent(const fs::path& data_dir)
+{
+    const fs::path dir = data_dir / "orca_plugins" / "agent";
+    fs::create_directories(dir);
+    std::ofstream(dir / "echo_agent.py") << ECHO_AGENT_PLUGIN;
+    std::ofstream((dir / ".install_state.json").string())
+        << json{{"installed_from", "local"}, {"installed_version", "0.1"}, {"plugin_name", "Echo Agent"},
+                {"enabled", true}, {"permissions", json::object()}, {"capabilities", json::array()}}
+               .dump(2);
+}
+
+} // namespace
+
+TEST_CASE("a printer-connection capability connects, relays messages and reports a print", "[Plugins]")
+{
+    ScopedDataDir dir;
+    REQUIRE(start_runtime().empty());
+    install_echo_agent(dir.path);
+    REQUIRE(Plugins::discover().empty());
+    const std::string key = find_plugin("Echo Agent")["key"];
+    REQUIRE(Plugins::load(key).empty());
+
+    const json info = json::parse(Plugins::agent_info(key, "Echo"));
+    CHECK(info["name"] == "Echo agent");
+    CHECK(json::parse(Plugins::agent_info(key, "nope")).contains("error"));
+
+    std::vector<PluginEvent> events;
+    plugin_events::set_sink([&events](const PluginEvent& e) { events.push_back(e); });
+    CHECK_FALSE(Plugins::agent_connect(key, "Echo", "SN1", "", "", "", false).empty()); // the plugin refuses an empty address
+    REQUIRE(Plugins::agent_connect(key, "Echo", "SN1", "10.0.0.5", "bblp", "code", false).empty());
+
+    REQUIRE(Plugins::agent_send(key, "Echo", "SN1", R"({"print":{"command":"pause"}})").empty());
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].kind == "agent-message");
+    const json relayed = json::parse(events[0].payload_json);
+    CHECK(relayed["dev_id"] == "SN1");
+    CHECK(json::parse(relayed["message"].get<std::string>())["print"]["gcode_state"] == "IDLE");
+
+    REQUIRE(Plugins::agent_print(key, "Echo", R"({"dev_id":"SN1","filename":"/tmp/a.gcode","dev_ip":"10.0.0.5"})").empty());
+    REQUIRE(events.size() == 2);
+    CHECK(events[1].kind == "agent-print");
+    CHECK(json::parse(events[1].payload_json)["message"] == "uploaded /tmp/a.gcode");
+
+    CHECK(Plugins::agent_disconnect(key, "Echo").empty());
+    plugin_events::set_sink(nullptr);
+    REQUIRE(Plugins::unload(key));
+}

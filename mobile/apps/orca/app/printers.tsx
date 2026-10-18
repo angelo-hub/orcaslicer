@@ -4,10 +4,11 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Alert, FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { scanLocalNetwork, type DiscoveredHost } from '@/lib/discovery'
+import { loadedPrinterAgents, type LoadedAgent } from '@/lib/plugins/native'
 import { colors } from '@/lib/theme'
 import {
   clientFor,
-  HOST_KINDS,
+  hostKinds,
   loadPrinters,
   normalizeUrl,
   savePrinters,
@@ -39,6 +40,18 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
   const [kind, setKind] = useState<PrinterHostKind>(initial?.kind ?? 'moonraker')
   const [url, setUrl] = useState(initial?.url ?? '')
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? '')
+  // A plugin host: which loaded printer-connection plugin drives it, and the printer's
+  // id as that plugin knows it.
+  const agents = loadedPrinterAgents()
+  const [agent, setAgent] = useState<LoadedAgent | null>(
+    agents.find(
+      (a) => a.key === initial?.plugin?.key && a.capability === initial?.plugin?.capability,
+    ) ??
+      agents[0] ??
+      null,
+  )
+  const [devId, setDevId] = useState(initial?.plugin?.devId ?? '')
+  const [username, setUsername] = useState(initial?.username ?? '')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -69,7 +82,13 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
     kind,
     url: normalizeUrl(url),
     apiKey: apiKey.trim() === '' ? undefined : apiKey.trim(),
+    username: kind === 'plugin' && username.trim() !== '' ? username.trim() : undefined,
+    plugin:
+      kind === 'plugin' && agent !== null
+        ? { key: agent.key, capability: agent.capability, devId: devId.trim() }
+        : undefined,
   })
+  const pluginIncomplete = kind === 'plugin' && (agent === null || devId.trim() === '')
 
   const test = async (): Promise<void> => {
     setTesting(true)
@@ -84,7 +103,8 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
     }
   }
 
-  const hint = HOST_KINDS.find((k) => k.kind === kind)?.hint
+  const kinds = hostKinds()
+  const hint = kinds.find((k) => k.kind === kind)?.hint
 
   return (
     <View className="flex-1 bg-neutral-50 dark:bg-neutral-950">
@@ -110,7 +130,7 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
 
         <Card title="Host" padded>
           <View className="flex-row gap-1.5">
-            {HOST_KINDS.map((k) => (
+            {kinds.map((k) => (
               <Chip
                 key={k.kind}
                 label={k.label}
@@ -120,6 +140,49 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
             ))}
           </View>
         </Card>
+
+        {kind === 'plugin' ? (
+          <>
+            <Card title="Plugin" subtitle="The printer connection that drives this host" padded>
+              <View className="flex-row flex-wrap gap-1.5">
+                {agents.map((a) => (
+                  <Chip
+                    key={`${a.key}/${a.capability}`}
+                    label={`${a.capability} · ${a.pluginName}`}
+                    selected={agent?.key === a.key && agent.capability === a.capability}
+                    onPress={() => setAgent(a)}
+                  />
+                ))}
+              </View>
+            </Card>
+            <Card
+              title="Printer id"
+              subtitle="As the plugin knows it, e.g. the serial number"
+              padded
+            >
+              <TextInput
+                className="text-subhead text-neutral-900 dark:text-neutral-100"
+                placeholder="01P00A000000000"
+                placeholderTextColor={colors.placeholder}
+                value={devId}
+                onChangeText={setDevId}
+                autoCorrect={false}
+                autoCapitalize="characters"
+              />
+            </Card>
+            <Card title="User name (optional)" padded>
+              <TextInput
+                className="text-subhead text-neutral-900 dark:text-neutral-100"
+                placeholder="leave empty if the plugin needs none"
+                placeholderTextColor={colors.placeholder}
+                value={username}
+                onChangeText={setUsername}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+            </Card>
+          </>
+        ) : null}
 
         {initial === null ? (
           <Card
@@ -184,7 +247,16 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
           />
         </Card>
 
-        <Card title={kind === 'octoprint' ? 'Application key' : 'API key (optional)'} padded>
+        <Card
+          title={
+            kind === 'octoprint'
+              ? 'Application key'
+              : kind === 'plugin'
+                ? 'Password or access code'
+                : 'API key (optional)'
+          }
+          padded
+        >
           <TextInput
             className="text-subhead text-neutral-900 dark:text-neutral-100"
             placeholder={kind === 'octoprint' ? 'required' : 'leave empty if none'}
@@ -212,7 +284,7 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
               title={testing ? 'Testing…' : 'Test'}
               variant="secondary"
               onPress={test}
-              disabled={testing || url.trim() === ''}
+              disabled={testing || url.trim() === '' || pluginIncomplete}
               fullWidth
             />
           </View>
@@ -220,7 +292,11 @@ function PrinterEditor({ initial, onDone }: EditorProps): React.JSX.Element {
             <Button
               title="Save"
               onPress={() => onDone(host())}
-              disabled={url.trim() === '' || (kind === 'octoprint' && apiKey.trim() === '')}
+              disabled={
+                url.trim() === '' ||
+                (kind === 'octoprint' && apiKey.trim() === '') ||
+                pluginIncomplete
+              }
               fullWidth
             />
           </View>
