@@ -40,6 +40,8 @@ public:
   void pluginPageClose(const std::string& key, const std::string& capability) override;
   std::shared_ptr<Promise<std::string>> pluginPageSend(const std::string& key, const std::string& capability,
                                                        const std::string& messageJson) override;
+  std::string pluginCheckRefs(const std::string& refsJson) override;
+  std::shared_ptr<Promise<std::string>> pluginRunScript(const std::string& key, const std::string& capability) override;
 };
 
 } // namespace margelo::nitro::orca

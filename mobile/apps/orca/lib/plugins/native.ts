@@ -4,8 +4,16 @@ import type { OrcaCore, PluginEvent } from 'react-native-orca-core'
 
 import { nativePath } from '../profiles'
 import { showToast } from '../toast'
-import { parseNativePlugins } from './parse'
-import type { NativePlugin } from './types'
+import {
+  parseNativePlugins,
+  parseRefStates,
+  parseScriptResult,
+  type RefState,
+  type RefStatus,
+  type ScriptResult,
+} from './parse'
+import { presetPluginRefs } from './refs'
+import type { CapabilityRef, NativePlugin } from './types'
 
 // The plugin runtime inside the core, when the installed core has one. The app starts it
 // once (the Python standard library ships in the bundle under python/), keeps it told
@@ -72,6 +80,60 @@ export function subscribePageMessages(
     set.delete(fn)
     if (set.size === 0) pageListeners.delete(id)
   }
+}
+
+/** What the runtime makes of a preset's plugin references; empty without a runtime. */
+export function checkRefs(refs: CapabilityRef[]): RefStatus[] {
+  if (core === null || !initialized || refs.length === 0) return []
+  return parseRefStates(core.pluginCheckRefs(JSON.stringify(refs)))
+}
+
+const REF_PROBLEM: Record<RefState, string | null> = {
+  loaded: null,
+  disabled: 'is switched off',
+  installed: 'is not loaded',
+  missing: 'is not installed on this device',
+  error: 'failed to load',
+}
+
+/**
+ * Before a slice: true when every plugin the presets ask for is ready, or the user chose
+ * to slice without the ones that are not. The hooks skip unresolved references, so the
+ * slice itself never fails over them; it just runs without that plugin.
+ */
+export function confirmPluginRefs(session: { option(key: string): string }): Promise<boolean> {
+  if (core === null || !initialized) return Promise.resolve(true)
+  const refs = presetPluginRefs(session)
+  const problems = checkRefs(refs)
+    .map((status) => {
+      const problem = REF_PROBLEM[status.state]
+      const ref = refs.find((r) => r.uuid === status.uuid && r.capability === status.capability)
+      return problem === null ? null : `${ref?.name || status.capability} ${problem}`
+    })
+    .filter((line): line is string => line !== null)
+  if (problems.length === 0) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Plugins not ready',
+      `${problems.join('\n')}\n\nThe preset will slice without ${problems.length === 1 ? 'it' : 'them'}.`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Slice anyway', onPress: () => resolve(true) },
+      ],
+      { cancelable: false },
+    )
+  })
+}
+
+export async function runScript(key: string, capability: string): Promise<ScriptResult> {
+  if (core === null || !initialized)
+    return {
+      status: 'fatal_error',
+      message: '',
+      data: '',
+      error: 'The plugin runtime is not running.',
+    }
+  return parseScriptResult(await core.pluginRunScript(key, capability))
 }
 
 export function nativePlugins(): NativePlugin[] {

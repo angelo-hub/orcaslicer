@@ -150,6 +150,70 @@ export function parseNativePlugins(text: string): NativePlugin[] {
     .filter((p) => p.key !== '')
 }
 
+export type RefState = 'loaded' | 'disabled' | 'installed' | 'missing' | 'error'
+
+export interface RefStatus {
+  uuid: string
+  capability: string
+  state: RefState
+}
+
+const REF_STATES: RefState[] = ['loaded', 'disabled', 'installed', 'missing', 'error']
+
+/** The runtime's verdict on a preset's plugin references (Plugins::check_preset_refs). */
+export function parseRefStates(text: string): RefStatus[] {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((v): v is Json => typeof v === 'object' && v !== null)
+    .map((item) => {
+      const state = str(item, 'state')
+      return {
+        uuid: str(item, 'uuid'),
+        capability: str(item, 'capability'),
+        state: (REF_STATES as string[]).includes(state) ? (state as RefState) : 'missing',
+      }
+    })
+}
+
+export interface ScriptResult {
+  status: 'success' | 'skipped' | 'recoverable_error' | 'fatal_error'
+  message: string
+  data: string
+  error: string
+}
+
+/** The outcome of a script capability (Plugins::run_script). */
+export function parseScriptResult(text: string): ScriptResult {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return {
+      status: 'fatal_error',
+      message: '',
+      data: '',
+      error: 'The runtime returned no result.',
+    }
+  }
+  const item = typeof raw === 'object' && raw !== null ? (raw as Json) : {}
+  const status = str(item, 'status')
+  return {
+    status:
+      status === 'success' || status === 'skipped' || status === 'recoverable_error'
+        ? status
+        : 'fatal_error',
+    message: str(item, 'message'),
+    data: str(item, 'data'),
+    error: str(item, 'error'),
+  }
+}
+
 /** A wheel is a zip; anything else is treated as a single Python file. */
 export function sniffPackageKind(bytes: Uint8Array): PackageKind {
   return bytes.length >= 4 &&

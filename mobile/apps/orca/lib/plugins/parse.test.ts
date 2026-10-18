@@ -5,6 +5,8 @@ import {
   parseCatalog,
   parseDownload,
   parseNativePlugins,
+  parseRefStates,
+  parseScriptResult,
   sniffPackageKind,
 } from './parse.ts'
 
@@ -135,5 +137,30 @@ describe('parseNativePlugins', () => {
       capabilities: [{ name: 'Spool page', type: 'pages', enabled: true }],
     })
     expect(parseNativePlugins('not json')).toEqual([])
+  })
+})
+
+describe('parseRefStates and parseScriptResult', () => {
+  test('reads the runtime verdicts, defaulting an unknown state to missing', () => {
+    expect(
+      parseRefStates(
+        '[{"uuid":"u","capability":"c","state":"loaded"},{"uuid":"v","capability":"d","state":"odd"}]',
+      ),
+    ).toEqual([
+      { uuid: 'u', capability: 'c', state: 'loaded' },
+      { uuid: 'v', capability: 'd', state: 'missing' },
+    ])
+    expect(parseRefStates('nope')).toEqual([])
+  })
+
+  test('reads a script outcome and treats garbage as a fatal error', () => {
+    expect(parseScriptResult('{"status":"skipped","message":"m","data":"d","error":""}')).toEqual({
+      status: 'skipped',
+      message: 'm',
+      data: 'd',
+      error: '',
+    })
+    expect(parseScriptResult('{"status":"weird"}').status).toBe('fatal_error')
+    expect(parseScriptResult('nope').status).toBe('fatal_error')
   })
 })

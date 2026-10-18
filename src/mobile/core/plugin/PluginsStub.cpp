@@ -1,4 +1,5 @@
 #include "../Plugins.hpp"
+#include "PluginPipeline.hpp"
 
 // The core without ORCA_MOBILE_PLUGINS: no interpreter, so every call says so.
 
@@ -31,5 +32,11 @@ std::string page_icon(const std::string&, const std::string&) { return {}; }
 std::string page_open(const std::string&, const std::string&) { return NOT_SUPPORTED; }
 void        page_close(const std::string&, const std::string&) {}
 std::string page_send(const std::string&, const std::string&, const std::string&) { return NOT_SUPPORTED; }
+std::string check_preset_refs(const std::string&) { return "[]"; }
+std::string run_script(const std::string&, const std::string&)
+{
+    return std::string("{\"status\":\"fatal_error\",\"message\":\"\",\"data\":\"\",\"error\":\"") + NOT_SUPPORTED + "\"}";
+}
+void post_process_gcode(const std::string&, const std::string&, const DynamicPrintConfig&) {}
 
 }}} // namespace Slic3r::Mobile::Plugins

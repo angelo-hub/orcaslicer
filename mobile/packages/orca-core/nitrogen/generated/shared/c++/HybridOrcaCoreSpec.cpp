@@ -37,6 +37,8 @@ namespace margelo::nitro::orca {
       prototype.registerHybridMethod("pluginPageOpen", &HybridOrcaCoreSpec::pluginPageOpen);
       prototype.registerHybridMethod("pluginPageClose", &HybridOrcaCoreSpec::pluginPageClose);
       prototype.registerHybridMethod("pluginPageSend", &HybridOrcaCoreSpec::pluginPageSend);
+      prototype.registerHybridMethod("pluginCheckRefs", &HybridOrcaCoreSpec::pluginCheckRefs);
+      prototype.registerHybridMethod("pluginRunScript", &HybridOrcaCoreSpec::pluginRunScript);
     });
   }
 

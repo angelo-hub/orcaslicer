@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
-import React, { useEffect } from 'react'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import React, { useEffect, useState } from 'react'
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 
 import { useCloudStore } from '@/lib/cloud/store'
 import {
@@ -9,7 +9,9 @@ import {
   usePluginStore,
   type PluginEntry,
 } from '@/lib/plugins/store'
+import { runScript } from '@/lib/plugins/native'
 import { relativeTime } from '@/lib/time'
+import { showToast } from '@/lib/toast'
 import { Button } from '@/ui/Button'
 import { Card } from '@/ui/Card'
 import { EmptyState } from '@/ui/EmptyState'
@@ -80,6 +82,26 @@ export default function PluginsScreen(): React.JSX.Element {
   const store = usePluginStore()
   const entries = pluginEntries(store)
   const orphans = orphanedInstalls(store)
+  const [running, setRunning] = useState<string | null>(null)
+  const runScriptAndReport = async (key: string, capability: string) => {
+    setRunning(`${key}/${capability}`)
+    try {
+      const result = await runScript(key, capability)
+      const failed = result.status === 'recoverable_error' || result.status === 'fatal_error'
+      const text = result.error || result.message || (failed ? 'The script failed.' : 'Done.')
+      if (failed) Alert.alert(capability, text)
+      else showToast(`${capability}: ${text}`, 'success')
+    } finally {
+      setRunning(null)
+    }
+  }
+  const scripts = store.runtime.flatMap((plugin) =>
+    plugin.loaded
+      ? plugin.capabilities
+          .filter((cap) => cap.type === 'script' && cap.enabled)
+          .map((cap) => ({ plugin, cap }))
+      : [],
+  )
   const pages = store.runtime.flatMap((plugin) =>
     plugin.loaded
       ? plugin.capabilities
@@ -150,6 +172,37 @@ export default function PluginsScreen(): React.JSX.Element {
           ))
         )}
       </Card>
+
+      {scripts.length > 0 ? (
+        <Card
+          title="Scripts"
+          subtitle="Run on demand by the loaded plugins"
+          padded={false}
+          index={1}
+        >
+          {scripts.map(({ plugin, cap }, i) => (
+            <View
+              key={`${plugin.key}/${cap.name}`}
+              className={`flex-row items-center gap-3 px-4 py-3 ${i === scripts.length - 1 ? '' : 'border-b border-neutral-100 dark:border-neutral-800'}`}
+            >
+              <View className="flex-1">
+                <Text className="text-subhead font-medium text-neutral-900 dark:text-neutral-100">
+                  {cap.name}
+                </Text>
+                <Text className="mt-0.5 text-footnote text-neutral-500 dark:text-neutral-400">
+                  {plugin.name}
+                </Text>
+              </View>
+              <Button
+                title="Run"
+                variant="secondary"
+                loading={running === `${plugin.key}/${cap.name}`}
+                onPress={() => void runScriptAndReport(plugin.key, cap.name)}
+              />
+            </View>
+          ))}
+        </Card>
+      ) : null}
 
       {pages.length > 0 ? (
         <Card title="Pages" subtitle="Screens the loaded plugins provide" padded={false} index={1}>

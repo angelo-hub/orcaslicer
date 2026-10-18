@@ -423,4 +423,13 @@ export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   pluginPageClose(key: string, capability: string): void
   /** Delivers a page message (JSON text) to the plugin's on_message. Resolves to an error, or ''. */
   pluginPageSend(key: string, capability: string, messageJson: string): Promise<string>
+
+  /**
+   * What the runtime makes of a preset's plugin references: a JSON array of
+   * {name, uuid, capability} in, {uuid, capability, state} out; see Plugins::check_preset_refs.
+   * Touches no Python, so it is synchronous.
+   */
+  pluginCheckRefs(refsJson: string): string
+  /** Runs a script capability. Resolves to JSON {status, message, data, error}. */
+  pluginRunScript(key: string, capability: string): Promise<string>
 }

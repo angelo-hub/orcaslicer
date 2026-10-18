@@ -124,4 +124,13 @@ std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginPageSend(const std::
       [key, capability, messageJson]() { return Plugins::page_send(key, capability, messageJson); });
 }
 
+std::string HybridOrcaCore::pluginCheckRefs(const std::string& refsJson) {
+  return Plugins::check_preset_refs(refsJson);
+}
+
+std::shared_ptr<Promise<std::string>> HybridOrcaCore::pluginRunScript(const std::string& key,
+                                                                      const std::string& capability) {
+  return Promise<std::string>::async([key, capability]() { return Plugins::run_script(key, capability); });
+}
+
 } // namespace margelo::nitro::orca

@@ -66,6 +66,18 @@ void answer(long request_id, const std::string& answer);
 
 int loaded_count();
 
+// What the runtime makes of a preset's plugin references (`name;uuid;capability`, as
+// PrintConfig's `plugins` / `slicing_pipeline_plugin` options carry them). Takes a JSON
+// array of {name, uuid, capability}; returns one of {uuid, capability, state} per entry
+// with state "loaded", "disabled" (loaded, capability switched off), "installed" (on the
+// device, not loaded), "missing", or "error" (loaded, but no such capability). The hooks
+// themselves skip anything unresolved, so this only exists to warn before slicing.
+std::string check_preset_refs(const std::string& refs_json);
+
+// Runs a script capability. Returns JSON {status, message, data, error}; status is
+// "success", "skipped", "recoverable_error" or "fatal_error".
+std::string run_script(const std::string& key, const std::string& capability);
+
 // A loaded pages capability, shown by the app in a web view. The page talks to the
 // plugin through page_send (the plugin's on_message) and, once page_open installed the
 // sender, the plugin's post_message arrives as a page-message event whose payload is the

@@ -242,6 +242,59 @@ void set_event_sink(std::function<void(const PluginEvent&)> sink) { plugin_event
 
 void answer(long request_id, const std::string& value) { plugin_events::answer(request_id, value); }
 
+std::string check_preset_refs(const std::string& refs_json)
+{
+    json out  = json::array();
+    json refs = json::parse(refs_json, nullptr, false);
+    if (!refs.is_array())
+        return out.dump();
+    PluginManager& manager = PluginManager::instance();
+    for (const json& ref : refs) {
+        if (!ref.is_object())
+            continue;
+        const std::string uuid       = ref.value("uuid", "");
+        const std::string name       = ref.value("name", "");
+        const std::string capability = ref.value("capability", "");
+        const std::string key        = uuid.empty() ? name : uuid;
+        std::string       state      = "missing";
+        PluginDescriptor  descriptor;
+        if (s_initialized && manager.try_get_plugin_descriptor(key, descriptor)) {
+            if (!manager.is_plugin_loaded(key))
+                state = descriptor.has_error() ? "error" : "installed";
+            else if (auto cap = manager.get_plugin_capability(capability, PluginCapabilityType::Unknown, false))
+                state = cap->is_enabled() ? "loaded" : "disabled";
+            else
+                state = "error";
+        }
+        out.push_back({{"uuid", uuid}, {"capability", capability}, {"state", state}});
+    }
+    return out.dump();
+}
+
+std::string run_script(const std::string& key, const std::string& capability)
+{
+    json out = {{"status", "fatal_error"}, {"message", ""}, {"data", ""}, {"error", ""}};
+    if (!s_initialized) {
+        out["error"] = "The plugin runtime is not initialized.";
+        return out.dump();
+    }
+    std::string     error;
+    ExecutionResult result = PluginManager::instance().run_script_capability(key, capability, error);
+    if (error.empty() && !PluginManager::instance().get_plugin_capability(
+                             PluginCapabilityId{PluginCapabilityType::Script, capability, key}, false))
+        error = "The plugin has no script called " + capability + " or is not loaded.";
+    switch (result.status) {
+    case PluginResult::Success: out["status"] = "success"; break;
+    case PluginResult::Skipped: out["status"] = "skipped"; break;
+    case PluginResult::RecoverableError: out["status"] = "recoverable_error"; break;
+    case PluginResult::FatalError: out["status"] = "fatal_error"; break;
+    }
+    out["message"] = result.message;
+    out["data"]    = result.data;
+    out["error"]   = error;
+    return out.dump();
+}
+
 int loaded_count()
 {
     if (!s_initialized)

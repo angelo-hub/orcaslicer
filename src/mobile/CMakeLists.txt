@@ -35,6 +35,8 @@ if (ORCA_MOBILE_PLUGINS)
         core/plugin/PluginHostAppMobile.cpp
         core/plugin/PluginHostUiMobile.cpp
         core/plugin/PluginPages.cpp
+        core/plugin/PluginPipeline.cpp
+        core/plugin/PluginPipeline.hpp
         ${_plugin_dir}/PluginAuditManager.cpp
         ${_plugin_dir}/PluginConfig.cpp
         ${_plugin_dir}/PluginFsUtils.cpp

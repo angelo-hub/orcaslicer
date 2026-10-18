@@ -245,3 +245,41 @@ TEST_CASE("a pages capability hands over its HTML and relays messages both ways"
     plugin_events::set_sink(nullptr);
     REQUIRE(Plugins::unload(key));
 }
+
+#include "libslic3r/PrintConfig.hpp"
+#include "mobile/core/plugin/PluginPipeline.hpp"
+
+TEST_CASE("the G-code step runs the preset's slicing-pipeline plugin on the exported file", "[Plugins]")
+{
+    ScopedDataDir dir;
+    REQUIRE(start_runtime().empty());
+    install_sample(dir.path, "stamp");
+    REQUIRE(Plugins::discover().empty());
+    const std::string key = find_plugin("G-code Stamp")["key"];
+    REQUIRE(Plugins::load(key).empty());
+
+    // The references a preset carries: the capability by name, and the manifest entry
+    // that names the plugin it lives in (a local plugin's key, no uuid).
+    DynamicPrintConfig config;
+    config.option<ConfigOptionStrings>("slicing_pipeline_plugin", true)->values = {"G-code Stamp"};
+    config.set_key_value("plugins", new ConfigOptionStrings({key + ";;G-code Stamp"}));
+
+    const fs::path gcode = dir.path / "out.gcode";
+    std::ofstream(gcode.string()) << "; header\nG28\n";
+    Plugins::post_process_gcode(gcode.string(), "out.gcode", config);
+
+    std::ifstream in(gcode.string());
+    std::string   text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(text.find("G-code Stamp plugin") != std::string::npos);
+    CHECK(text.find("G28") != std::string::npos);
+
+    // A reference the runtime cannot resolve is skipped, never an error.
+    const json states = json::parse(Plugins::check_preset_refs(
+        R"([{"name":")" + key + R"(","uuid":"","capability":"G-code Stamp"},{"name":"x","uuid":"nope","capability":"y"}])"));
+    REQUIRE(states.size() == 2);
+    CHECK(states[0]["state"] == "loaded");
+    CHECK(states[1]["state"] == "missing");
+    REQUIRE(Plugins::unload(key));
+    CHECK(json::parse(Plugins::check_preset_refs(R"([{"name":")" + key + R"(","uuid":"","capability":"G-code Stamp"}])"))[0]["state"] ==
+          "installed");
+}
