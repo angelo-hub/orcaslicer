@@ -15,6 +15,7 @@ namespace margelo::nitro::orca {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("version", &HybridOrcaCoreSpec::getVersion);
+      prototype.registerHybridGetter("upstreamCommit", &HybridOrcaCoreSpec::getUpstreamCommit);
       prototype.registerHybridMethod("initialize", &HybridOrcaCoreSpec::initialize);
       prototype.registerHybridMethod("optionDefinitionsJson", &HybridOrcaCoreSpec::optionDefinitionsJson);
       prototype.registerHybridMethod("createSession", &HybridOrcaCoreSpec::createSession);

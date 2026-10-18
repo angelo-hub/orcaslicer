@@ -6,27 +6,141 @@
   "tag-separator": "-",
   "pull-request-title-pattern": "chore: release Orca Mobile ${version}",
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Fixes" },
-    { "type": "perf", "section": "Performance" },
-    { "type": "revert", "section": "Reverts" },
-    { "type": "refactor", "section": "Maintenance", "hidden": true },
-    { "type": "build", "section": "Maintenance", "hidden": true },
-    { "type": "ci", "section": "Maintenance", "hidden": true },
-    { "type": "chore", "section": "Maintenance", "hidden": true },
-    { "type": "docs", "section": "Maintenance", "hidden": true },
-    { "type": "test", "section": "Maintenance", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "deps",
+      "section": "OrcaSlicer engine"
+    },
+    {
+      "type": "revert",
+      "section": "Reverts"
+    },
+    {
+      "type": "refactor",
+      "section": "Maintenance",
+      "hidden": true
+    },
+    {
+      "type": "build",
+      "section": "Maintenance",
+      "hidden": true
+    },
+    {
+      "type": "ci",
+      "section": "Maintenance",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Maintenance",
+      "hidden": true
+    },
+    {
+      "type": "docs",
+      "section": "Maintenance",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Maintenance",
+      "hidden": true
+    }
   ],
   "packages": {
-    "mobile": {
+    ".": {
       "component": "mobile",
       "package-name": "Orca Mobile",
       "release-type": "simple",
-      "changelog-path": "CHANGELOG.md",
+      "version-file": "mobile/version.txt",
+      "changelog-path": "mobile/CHANGELOG.md",
       "extra-files": [
-        { "type": "json", "path": "apps/orca/app.json", "jsonpath": "$.expo.version" },
-        { "type": "json", "path": "apps/orca/package.json", "jsonpath": "$.version" }
+        {
+          "type": "json",
+          "path": "mobile/apps/orca/app.json",
+          "jsonpath": "$.expo.version"
+        },
+        {
+          "type": "json",
+          "path": "mobile/apps/orca/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "exclude-paths": [
+        ".claude",
+        ".devcontainer",
+        ".github",
+        "SoftFever_doc",
+        "cmake",
+        "deps/Assimp",
+        "deps/Blosc",
+        "deps/Boost",
+        "deps/CGAL",
+        "deps/CURL",
+        "deps/Cereal",
+        "deps/Draco",
+        "deps/EXPAT",
+        "deps/Eigen",
+        "deps/FFMPEG",
+        "deps/FREETYPE",
+        "deps/GLEW",
+        "deps/GLFW",
+        "deps/GMP",
+        "deps/JPEG",
+        "deps/MPFR",
+        "deps/NLopt",
+        "deps/NanoSVG",
+        "deps/OCCT",
+        "deps/OpenCSG",
+        "deps/OpenCV",
+        "deps/OpenEXR",
+        "deps/OpenSSL",
+        "deps/OpenVDB",
+        "deps/PNG",
+        "deps/Qhull",
+        "deps/TBB",
+        "deps/WebView2",
+        "deps/ZLIB",
+        "deps/libnoise",
+        "deps/python3",
+        "deps/wxInspector",
+        "deps/wxWidgets",
+        "deps_src",
+        "docs",
+        "localization",
+        "resources",
+        "sandboxes",
+        "scripts/flatpak",
+        "scripts/linux.d",
+        "scripts/msix",
+        "scripts/tests",
+        "src/dev-utils",
+        "src/glad",
+        "src/libslic3r",
+        "src/libvgcode",
+        "src/slic3r",
+        "tests/catch2",
+        "tests/compare_analyzer",
+        "tests/data",
+        "tests/fff_print",
+        "tests/filament_group",
+        "tests/libnest2d",
+        "tests/libslic3r",
+        "tests/sla_print",
+        "tests/slic3rutils",
+        "tools"
       ]
     }
-  }
+  },
+  "commit-search-depth": 3000
 }

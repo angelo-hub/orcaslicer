@@ -69,6 +69,13 @@ TEST_CASE("Mobile façade reports the core version", "[Session]")
     REQUIRE_FALSE(core_version().empty());
 }
 
+TEST_CASE("Mobile façade reports the full upstream commit it is based on", "[Session]")
+{
+    const std::string commit = upstream_commit();
+    REQUIRE(commit.size() == 40);
+    REQUIRE(commit.find_first_not_of("0123456789abcdef") == std::string::npos);
+}
+
 TEST_CASE("Option definitions describe every preset option", "[Session]")
 {
     const nlohmann::json defs = nlohmann::json::parse(Session::option_definitions_json());

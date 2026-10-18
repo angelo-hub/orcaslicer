@@ -12,6 +12,13 @@ name: Sync with upstream
 # `sync/upstream`. A commit GitHub creates is signed with GitHub's own key and shows as
 # Verified, so no signing key has to live in the repository's secrets.
 #
+# On top of the merge goes one commit that records the upstream commit the fork now
+# stands on, in src/mobile/upstream-commit.txt, and regenerates the release-please
+# exclude list for any directory upstream added (mobile/scripts/owned-paths.mjs). The
+# core compiles that commit into its version, which the app's About screen shows, and
+# the commit's "deps:" message is what puts the engine update in the mobile changelog;
+# upstream's own commits stay out of it.
+#
 # The sync pull request must be merged with a MERGE COMMIT. A squash (or rebase) turns
 # upstream's commits into new ones git cannot recognise as upstream's history, so the
 # next sync merges the same commits again and every later upstream edit to those
@@ -119,6 +126,35 @@ jobs:
           esac
           git push origin --delete "$STAGING_BRANCH"
 
+      - name: Record the upstream commit
+        if: env.behind != '0' && steps.dry.outputs.clean == 'true'
+        run: |
+          set -euo pipefail
+          git fetch -q origin "$SYNC_BRANCH"
+          git checkout -q --detach FETCH_HEAD
+          head="$(git rev-parse HEAD)"
+          upstream_sha="$(git rev-parse "upstream/$UPSTREAM_BRANCH")"
+          version="$(sed -n 's/^set(SoftFever_VERSION "\(.*\)")$/\1/p' version.inc)"
+          echo "$upstream_sha" > src/mobile/upstream-commit.txt
+          node mobile/scripts/owned-paths.mjs --write
+          # createCommitOnBranch, like the merges API, makes a commit GitHub signs.
+          jq -n \
+            --arg repo "$GITHUB_REPOSITORY" --arg branch "$SYNC_BRANCH" --arg head "$head" \
+            --arg headline "deps: update the OrcaSlicer engine to $version (${upstream_sha:0:10})" \
+            --arg body "OrcaSlicer/OrcaSlicer $UPSTREAM_BRANCH at $upstream_sha, $behind commit(s) since the previous sync." \
+            --arg stamp "$(base64 -w0 src/mobile/upstream-commit.txt)" \
+            --arg config "$(base64 -w0 .github/release-please-config.json)" \
+            '{query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                expectedHeadOid: $head,
+                message: {headline: $headline, body: $body},
+                fileChanges: {additions: [
+                  {path: "src/mobile/upstream-commit.txt", contents: $stamp},
+                  {path: ".github/release-please-config.json", contents: $config}]}}}}' > commit.json
+          gh api graphql --input commit.json --jq '.data.createCommitOnBranch.commit.oid'
+          echo "version=$version" >> "$GITHUB_ENV"
+
       - name: Publish upstream as the branch when the merge conflicts
         if: env.behind != '0' && steps.dry.outputs.clean != 'true'
         run: git push --force origin "upstream/$UPSTREAM_BRANCH:refs/heads/$SYNC_BRANCH"
@@ -135,7 +171,7 @@ jobs:
             echo "Upstream \`OrcaSlicer/OrcaSlicer\` \`$UPSTREAM_BRANCH\` is at \`$upstream_head\`; this fork's \`$BASE\` is **$behind commit(s)** behind."
             echo
             if [ "$CLEAN" = "true" ]; then
-              echo "The merge applies cleanly. The branch \`$SYNC_BRANCH\` is \`$BASE\` plus one merge commit of upstream, created and signed by GitHub."
+              echo "The merge applies cleanly. The branch \`$SYNC_BRANCH\` is \`$BASE\` plus one merge commit of upstream and one commit recording it for the mobile release (OrcaSlicer \`$version\`), both created and signed by GitHub."
             else
               echo "**The merge conflicts.** The branch \`$SYNC_BRANCH\` is upstream's \`$UPSTREAM_BRANCH\` as is; resolve locally and push the result to it:"
               echo
@@ -143,6 +179,9 @@ jobs:
               echo "git fetch origin $BASE && git checkout $BASE"
               echo "git fetch https://github.com/OrcaSlicer/OrcaSlicer.git $UPSTREAM_BRANCH"
               echo "git merge FETCH_HEAD        # resolve, then: git commit -S"
+              echo "git rev-parse FETCH_HEAD > src/mobile/upstream-commit.txt"
+              echo "(cd mobile && node scripts/owned-paths.mjs --write)"
+              echo "git commit -S -am \"deps: update the OrcaSlicer engine to \$(sed -n 's/^set(SoftFever_VERSION \"\\(.*\\)\")\$/\\1/p' version.inc) (\$(git rev-parse --short=10 FETCH_HEAD))\""
               echo "git push --force origin HEAD:$SYNC_BRANCH"
               echo '```'
               echo

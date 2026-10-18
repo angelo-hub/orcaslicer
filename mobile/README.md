@@ -80,10 +80,26 @@ tests" and "Commit messages" in branch protection.
 ## Releases
 
 Versions and releases are driven by [release-please](https://github.com/googleapis/release-please)
-from [conventional commits](https://www.conventionalcommits.org) under `mobile/`:
-`feat:` bumps the minor version, `fix:` and `perf:` the patch, `feat!:` or a
-`BREAKING CHANGE:` footer the major (minor while the version is 0.x). Commits without a
-type are left out of the version and the changelog.
+from [conventional commits](https://www.conventionalcommits.org) that touch the paths the
+port owns: the app, the façade (`src/mobile`) and its tests, and the iOS build, as listed
+in `scripts/owned-paths.mjs`. `feat:` bumps the minor version, `fix:`, `perf:` and `deps:`
+the patch, `feat!:` or a `BREAKING CHANGE:` footer the major (minor while the version is
+0.x). Commits without a type are left out of the version and the changelog.
+
+The release-please package is the repository root with every directory that holds none
+of those paths excluded, since release-please takes one directory per package. That
+keeps upstream OrcaSlicer's own commits, which each sync merges in by the thousand, out
+of the changelog. The exclude list is generated: `node scripts/owned-paths.mjs --write`
+after adding a path, and the "Lint and format" check fails when it is out of date.
+release-please walks every parent of `main`, upstream's commits included, so it searches
+3000 commits back (`commit-search-depth`) to reach the previous release past a sync.
+
+Moving to a newer OrcaSlicer is a release too. The "Sync with upstream" workflow adds a
+`deps: update the OrcaSlicer engine to <version> (<commit>)` commit to its pull request,
+which records the upstream commit in `src/mobile/upstream-commit.txt` and refreshes the
+exclude list; the changelog lists it under "OrcaSlicer engine". The core compiles that
+commit in, and the About screen shows the OrcaSlicer version and commit the build is
+based on.
 
 The "Mobile release" workflow (`.github/workflows/mobile_release.yml`), on every push to
 `main`:

@@ -20,6 +20,13 @@ add_library(libslic3r_mobile STATIC
 )
 
 target_include_directories(libslic3r_mobile PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# The upstream commit the core is based on (see upstream_commit()). Reconfigure when the
+# sync updates it, so the define never goes stale.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/upstream-commit.txt)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/upstream-commit.txt ORCA_UPSTREAM_COMMIT LIMIT_COUNT 1 REGEX "^[0-9a-f]+$")
+set_source_files_properties(core/OrcaMobile.cpp PROPERTIES
+    COMPILE_DEFINITIONS "ORCA_UPSTREAM_COMMIT=\"${ORCA_UPSTREAM_COMMIT}\"")
 target_link_libraries(libslic3r_mobile
     PUBLIC  libslic3r
     PRIVATE nlohmann_json

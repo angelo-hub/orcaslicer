@@ -366,6 +366,8 @@ export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }
 export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** Version of the slicing core compiled into the app. */
   readonly version: string
+  /** The OrcaSlicer upstream commit the core is based on, a full hash; empty when unknown. */
+  readonly upstreamCommit: string
   /** Points the core at the app's writable directories. Call once, before creating a session. */
   initialize(resourcesDir: string, dataDir: string): void
   /** Every print, filament and printer option definition as a JSON array; see Session::option_definitions_json. */

@@ -18,18 +18,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { OWNED_PATHS } from './owned-paths.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..')
 const PREFIX = 'mobile-v'
-const PATHS = [
-  'mobile',
-  'src/mobile',
-  'scripts/build_ios_core.sh',
-  'deps/deps-ios.cmake',
-  '.github/workflows/build_ios.yml',
-  '.github/workflows/mobile_release.yml',
-]
 
 const args = process.argv.slice(2)
 const tag = args.find((a) => !a.startsWith('--'))
@@ -63,13 +56,14 @@ const previous = tryGit('tag', '--list', `${PREFIX}*`, '--sort=-v:refname', '--m
 
 // A first release has no tag to count from; the newest commits are a fair stand-in.
 const range = previous ? [`${previous}..${ref}`] : ['-n', '60', ref]
-const log = tryGit('log', '--no-merges', '--format=%h%x1f%s', ...range, '--', ...PATHS)
+const log = tryGit('log', '--no-merges', '--format=%h%x1f%s', ...range, '--', ...OWNED_PATHS)
 
 const GROUPS = [
   ['Features', /^(feat|add|adds|added|new|support|implement|introduce|ship)\b/i],
   ['Fixes', /^(fix|fixes|fixed|bugfix|hotfix|correct|repair|stop|prevent)\b/i],
   ['Performance', /^(perf|speed|faster|optimi[sz]e)\b/i],
-  ['Maintenance', /^(chore|ci|build|docs?|test|tests|refactor|style|bump|deps?)\b/i],
+  ['OrcaSlicer engine', /^deps\b/i],
+  ['Maintenance', /^(chore|ci|build|docs?|test|tests|refactor|style|bump|dep)\b/i],
 ]
 const groups = new Map([...GROUPS.map(([g]) => [g, []]), ['Changes', []]])
 

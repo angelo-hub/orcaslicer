@@ -11,6 +11,10 @@ std::string HybridOrcaCore::getVersion() {
   return Slic3r::Mobile::core_version();
 }
 
+std::string HybridOrcaCore::getUpstreamCommit() {
+  return Slic3r::Mobile::upstream_commit();
+}
+
 void HybridOrcaCore::initialize(const std::string& resourcesDir, const std::string& dataDir) {
   Slic3r::Mobile::set_directories(resourcesDir, dataDir);
 }

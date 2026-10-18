@@ -48,6 +48,7 @@ namespace margelo::nitro::orca {
     public:
       // Properties
       virtual std::string getVersion() = 0;
+      virtual std::string getUpstreamCommit() = 0;
 
     public:
       // Methods

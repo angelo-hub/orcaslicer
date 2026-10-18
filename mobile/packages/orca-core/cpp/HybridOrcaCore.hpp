@@ -11,6 +11,7 @@ public:
   HybridOrcaCore() : HybridObject(TAG) {}
 
   std::string getVersion() override;
+  std::string getUpstreamCommit() override;
   void initialize(const std::string& resourcesDir, const std::string& dataDir) override;
   std::string optionDefinitionsJson() override;
   std::shared_ptr<HybridOrcaSessionSpec> createSession() override;

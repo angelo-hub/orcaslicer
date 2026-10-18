@@ -11,6 +11,10 @@ namespace Slic3r { namespace Mobile {
 // Version of the slicing core compiled into this library (SoftFever_VERSION).
 std::string core_version();
 
+// The OrcaSlicer upstream commit this fork's core is based on, the full hash from
+// src/mobile/upstream-commit.txt, which the upstream sync updates. Empty when unknown.
+std::string upstream_commit();
+
 // Directories the core reads and writes. Both must exist and be writable by the app.
 // resources_dir holds the fetched profiles and the bundled runtime data; data_dir holds
 // the app config, user presets and logs. Call once, before any other façade function.

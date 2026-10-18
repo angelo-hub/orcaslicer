@@ -5,14 +5,16 @@ name: Mobile release
 #
 #   release-please  on every push to main, keeps a release PR open that bumps the version
 #                   (mobile/version.txt, app.json, package.json) and the CHANGELOG from
-#                   the conventional commits under mobile/. Merging that PR tags
+#                   the conventional commits that touch the paths the port owns (the app,
+#                   the façade and the iOS build; mobile/scripts/owned-paths.mjs), an
+#                   upstream sync among them. Merging that PR tags
 #                   mobile-vX.Y.Z and creates the GitHub release; the jobs below then
 #                   build and attach the .ipa in the same run.
 #   version         decides what this run builds: that release; the release PR's own
 #                   candidate (production variant, mobile-vX.Y.Z-rc.N, an artifact only,
 #                   and the "IPA" check the ruleset on main requires before the PR can
-#                   merge); the weekly beta, tagged mobile-vX.Y.Z-beta.N if mobile/
-#                   changed since the newest mobile tag; or, by hand, a beta now or a
+#                   merge); the weekly beta, tagged mobile-vX.Y.Z-beta.N if an owned
+#                   path changed since the newest mobile tag; or, by hand, a beta now or a
 #                   test build that publishes nothing.
 #   ipa             builds the .ipa on macOS (a self-hosted Mac when MOBILE_MACOS_RUNNER
 #                   is set) as the app.config.ts variant: production for a release, beta
@@ -64,7 +66,7 @@ on:
   # whose head is a release-please branch builds; the rest skip in seconds.
   pull_request:
     branches: [main]
-  # The beta lane: Mondays 15:00 UTC, only when something under mobile/ changed since
+  # The beta lane: Mondays 15:00 UTC, only when a path the port owns changed since
   # the newest mobile tag.
   schedule:
     - cron: '0 15 * * 1'
@@ -98,8 +100,9 @@ jobs:
       pull-requests: write
       issues: write
     outputs:
-      created: ${{ steps.rp.outputs['mobile--release_created'] }}
-      tag: ${{ steps.rp.outputs['mobile--tag_name'] }}
+      # The package is the repository root, whose outputs carry no path prefix.
+      created: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
     steps:
       - name: App token
         id: app
@@ -165,22 +168,23 @@ jobs:
               release-please--*) ;;
               *) echo "build=false" >> "$GITHUB_OUTPUT"; echo "Not a release PR; nothing to build."; exit 0 ;;
             esac
-            tag=mobile-v$(jq -r .mobile .github/.release-please-manifest.json)-rc.$GITHUB_RUN_NUMBER
+            tag=mobile-v$(jq -r '."."' .github/.release-please-manifest.json)-rc.$GITHUB_RUN_NUMBER
             publish=false
           elif [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$LANE" = beta ]; then
             # Beta: the version the open release PR proposes (or the next patch when
             # none is open), numbered after the betas of it so far.
             last=$(git tag --list 'mobile-v*' --sort=-creatordate --merged HEAD | head -1)
+            mapfile -t owned < <(node mobile/scripts/owned-paths.mjs --list)
             if [ "$GITHUB_EVENT_NAME" = schedule ] && [ -n "$last" ] \
-                && git diff --quiet "$last" HEAD -- mobile; then
+                && git diff --quiet "$last" HEAD -- "${owned[@]}"; then
               echo "build=false" >> "$GITHUB_OUTPUT"
-              echo "Nothing under mobile/ changed since $last; no beta this week."
+              echo "Nothing the mobile port owns changed since $last; no beta this week."
               exit 0
             fi
             pending=$(git show 'origin/release-please--branches--main--components--mobile:.github/.release-please-manifest.json' 2>/dev/null \
-              | jq -r .mobile || true)
+              | jq -r '."." // .mobile // empty' || true)
             if [ -z "$pending" ]; then
-              IFS=. read -r major minor patch < <(jq -r .mobile .github/.release-please-manifest.json)
+              IFS=. read -r major minor patch < <(jq -r '."."' .github/.release-please-manifest.json)
               pending=$major.$minor.$((patch + 1))
             fi
             n=$(git tag --list "mobile-v$pending-beta.*" | wc -l)
@@ -188,7 +192,7 @@ jobs:
           elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             # A test build of the current version, with the beta identity so it installs
             # next to the stable app; nothing is tagged or published.
-            tag=mobile-v$(jq -r .mobile .github/.release-please-manifest.json)-dev.$GITHUB_RUN_NUMBER
+            tag=mobile-v$(jq -r '."."' .github/.release-please-manifest.json)-dev.$GITHUB_RUN_NUMBER
             publish=false variant=beta
           else
             # A push after a release whose .ipa never built (the IPA job failed, and

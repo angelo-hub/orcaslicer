@@ -53,6 +53,11 @@ jobs:
       - name: oxfmt
         run: pnpm format:check
 
+      # release-please counts the port's commits by excluding every directory that holds
+      # none of its paths; a directory added since the list was generated would count.
+      - name: Release paths
+        run: node scripts/owned-paths.mjs --check
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
@@ -117,11 +122,12 @@ jobs:
 
       - uses: ./.github/actions/mobile-setup
 
-      # Only commits under mobile/ need the convention: release-please reads no others,
-      # and a merge from upstream OrcaSlicer brings commits that never followed it.
+      # Only commits that touch the paths the port owns need the convention:
+      # release-please reads no others, and a merge from upstream OrcaSlicer brings
+      # commits that never followed it.
       # Commits before release-please's bootstrap-sha predate the convention too, so a
       # branch that started earlier is checked from that commit on.
-      - name: Commits under mobile/
+      - name: Commits on owned paths
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
@@ -132,8 +138,9 @@ jobs:
           if [ -n "$boot" ] && git merge-base --is-ancestor "$boot" "$HEAD" && git merge-base --is-ancestor "$BASE" "$boot"; then
             start="$boot"
           fi
+          mapfile -t owned < <(node scripts/owned-paths.mjs --list | sed 's|^|:/|')
           status=0
-          for sha in $(git log --no-merges --format=%H "$start..$HEAD" -- .); do
+          for sha in $(git log --no-merges --format=%H "$start..$HEAD" -- "${owned[@]}"); do
             if ! git log -1 --format=%B "$sha" | pnpm exec commitlint; then
               echo "::error::$(git log -1 --format='%h %s' "$sha")"
               status=1
@@ -149,8 +156,9 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
-          if [ -z "$(git diff --name-only "$BASE...$HEAD" -- .)" ]; then
-            echo "Touches nothing under mobile/"
+          mapfile -t owned < <(node scripts/owned-paths.mjs --list | sed 's|^|:/|')
+          if [ -z "$(git diff --name-only "$BASE...$HEAD" -- "${owned[@]}")" ]; then
+            echo "Touches no path the mobile port owns"
             exit 0
           fi
           printf '%s\n' "$TITLE" | pnpm exec commitlint
