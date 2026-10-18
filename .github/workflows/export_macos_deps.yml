@@ -1,7 +1,8 @@
-# One-off helper: restores the macOS deps cache that build_all.yml populates and uploads it as
-# an artifact, so a developer can unpack it into deps/build/<arch> instead of building deps
-# locally. Dispatch it from a branch whose deps/** matches the cached hash.
-name: Export macOS deps cache
+# Developer helper: produces the macOS deps (deps/build/<arch>/OrcaSlicer_dep) as a downloadable
+# artifact so nobody has to build them locally. Restores the cache build_all.yml populates when it
+# is still there, otherwise builds the deps on the runner exactly as build_deps.yml does and
+# re-seeds that cache. It never runs on PRs or on main pushes.
+name: Export macOS deps
 
 on:
   # Pushes to this branch run the export directly, since GitHub only dispatches workflows that
@@ -11,31 +12,63 @@ on:
   workflow_dispatch:
     inputs:
       arch:
-        description: Architecture of the cached deps
+        description: Architecture of the deps
         type: choice
         default: arm64
         options: [arm64, x86_64]
 
+env:
+  ARCH: ${{ inputs.arch || 'arm64' }}
+
 jobs:
   export:
     runs-on: macos-14
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+
+      - name: Compute cache key
+        id: key
+        run: echo "key=macos-${ARCH}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Restore deps cache
+        id: restore
         uses: actions/cache/restore@v6
         with:
-          path: ${{ github.workspace }}/deps/build/${{ inputs.arch || 'arm64' }}
-          key: macos-${{ inputs.arch || 'arm64' }}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }}
-          fail-on-cache-miss: true
+          path: ${{ github.workspace }}/deps/build/${{ env.ARCH }}
+          key: ${{ steps.key.outputs.key }}
+
+      - uses: lukka/get-cmake@latest
+        if: steps.restore.outputs.cache-hit != 'true'
+        with:
+          cmakeVersion: "~4.3.0"
+          useLocalCache: true
+          useCloudCache: true
+
+      - name: Build deps
+        if: steps.restore.outputs.cache-hit != 'true'
+        run: |
+          brew install automake texinfo libtool pkgconf yasm nasm
+          ./build_release_macos.sh -dx -j 3 -a "$ARCH" -t 10.15
+          (cd "deps/build/$ARCH" && find . -mindepth 1 -maxdepth 1 ! -name 'OrcaSlicer_dep' -exec rm -rf {} +)
+
+      - name: Save deps cache
+        if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/deps/build/${{ env.ARCH }}
+          key: ${{ steps.key.outputs.key }}
 
       - name: Pack
         run: |
-          du -sh deps/build/${{ inputs.arch || 'arm64' }}/OrcaSlicer_dep
-          tar -C deps/build -czf OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}.tar.gz ${{ inputs.arch || 'arm64' }}/OrcaSlicer_dep
+          du -sh "deps/build/$ARCH/OrcaSlicer_dep"
+          tar -C deps/build -czf "OrcaSlicer_dep_mac_${ARCH}.tar.gz" "$ARCH/OrcaSlicer_dep"
+          ls -lh "OrcaSlicer_dep_mac_${ARCH}.tar.gz"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}
-          path: OrcaSlicer_dep_mac_${{ inputs.arch || 'arm64' }}.tar.gz
-          retention-days: 3
+          name: OrcaSlicer_dep_mac_${{ env.ARCH }}
+          path: OrcaSlicer_dep_mac_${{ env.ARCH }}.tar.gz
+          retention-days: 5
