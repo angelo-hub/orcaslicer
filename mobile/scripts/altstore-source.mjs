@@ -55,6 +55,9 @@ const source = existsSync(sourcePath)
       apps: [],
       news: [],
     }
+// Required by AltStore, and checked for accuracy before a source is listed on
+// explore.alt.store. Filled in for sources created before it was written.
+source.nsfw ??= false
 
 let app = source.apps.find((a) => a.bundleIdentifier === meta.bundleIdentifier)
 if (!app) {
