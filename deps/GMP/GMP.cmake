@@ -22,8 +22,22 @@ if (MSVC)
 else ()
     set(_gmp_ccflags "-O2 -DNDEBUG -fPIC -DPIC -Wall -Wmissing-prototypes -Wpointer-arith -pedantic -fomit-frame-pointer -fno-common")
     set(_gmp_build_tgt "${CMAKE_SYSTEM_PROCESSOR}")
+    # The compilers and binutils the configure scripts of GMP and MPFR see. The
+    # superbuild's compiler serves everywhere but Android, where the per-API wrapper
+    # carries the target and the LLVM tools have to be named (deps-android.cmake).
+    set(_gmp_cc "${CMAKE_C_COMPILER}")
+    set(_gmp_cxx "${CMAKE_CXX_COMPILER}")
+    set(_gmp_tool_env "")
 
-    if (DEPS_IOS)
+    if (DEPS_ANDROID)
+        # Cross build with the NDK. --host comes from TOOLCHAIN_PREFIX below; GMP's
+        # assembly is not written for Android. config.guess names the build machine,
+        # which never matches an Android triple, so configure takes cross mode.
+        set(_gmp_cc "${DEPS_ANDROID_CC}")
+        set(_gmp_cxx "${DEPS_ANDROID_CXX}")
+        set(_gmp_tool_env ${DEPS_ANDROID_TOOL_ENV})
+        set(_gmp_build_tgt --disable-assembly)
+    elseif (DEPS_IOS)
         # Cross build from the Mac host. --host comes from TOOLCHAIN_PREFIX below; the
         # SDK, architecture and minimum version travel in the compiler flags. GMP's
         # arm64 assembly is written for macOS and is skipped on iOS.
@@ -82,7 +96,7 @@ else ()
         DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/GMP
         PATCH_COMMAND git apply ${GMP_DIRECTORY_FLAG} --verbose ${CMAKE_CURRENT_LIST_DIR}/0001-GMP_GCC15.patch
         BUILD_IN_SOURCE ON
-        CONFIGURE_COMMAND  env "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
+        CONFIGURE_COMMAND  env "CC=${_gmp_cc}" "CXX=${_gmp_cxx}" ${_gmp_tool_env} "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
         BUILD_COMMAND     make -j
         INSTALL_COMMAND   make install
     )

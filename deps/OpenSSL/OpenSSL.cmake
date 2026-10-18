@@ -13,6 +13,8 @@ else()
         endif()
     elseif(DEPS_IOS)
         set(_cross_arch "${DEPS_IOS_OPENSSL_TARGET}")
+    elseif(DEPS_ANDROID)
+        set(_cross_arch "${DEPS_ANDROID_OPENSSL_TARGET}")
     elseif(APPLE)
         set(_cross_arch "darwin64-${CMAKE_OSX_ARCHITECTURES}-cc")
 	endif()
@@ -39,15 +41,23 @@ else()
         # architecture and minimum version have to be added. They go through CFLAGS:
         # Configure reads a bare "-arch arm64" as a second target name.
         set(_conf_cmd env "CFLAGS=-arch ${DEPS_IOS_ARCH} ${DEPS_IOS_MIN_VERSION_FLAG}" ./Configure)
+    elseif(DEPS_ANDROID)
+        # The android-* targets of 1.1.1 locate the NDK through ANDROID_NDK_HOME and
+        # run the clang they find on PATH, at configure time and from the generated
+        # Makefile alike, so every step gets the same environment. The API level is
+        # a Configure argument, as NOTES.ANDROID prescribes.
+        set(_android_env env "ANDROID_NDK_HOME=${DEPS_ANDROID_NDK}" "PATH=${DEPS_ANDROID_BIN}:$ENV{PATH}")
+        set(_conf_cmd ${_android_env} ./Configure)
+        set(_cross_arch "${_cross_arch}" "-D__ANDROID_API__=${DEPS_ANDROID_API}")
     elseif(APPLE)
         set(_conf_cmd export MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} && ./Configure -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})
     else()
         set(_conf_cmd env "CC=${CMAKE_C_COMPILER}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" "./config")
     endif()
     set(_cross_comp_prefix_line "")
-    set(_make_cmd make -j${NPROC})
-    set(_install_cmd make -j${NPROC} install_sw)
-    if (CMAKE_CROSSCOMPILING AND NOT DEPS_IOS)
+    set(_make_cmd ${_android_env} make -j${NPROC})
+    set(_install_cmd ${_android_env} make -j${NPROC} install_sw)
+    if (CMAKE_CROSSCOMPILING AND NOT DEPS_IOS AND NOT DEPS_ANDROID)
         set(_cross_comp_prefix_line "--cross-compile-prefix=${TOOLCHAIN_PREFIX}-")
 
         if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64" OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "arm64")

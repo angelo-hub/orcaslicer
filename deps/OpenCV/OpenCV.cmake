@@ -32,6 +32,33 @@ if (DEPS_IOS)
     )
 endif ()
 
+# OpenCV's Android build wants the SDK for its Java projects and installs into an
+# sdk/native/<abi> tree. The core needs the image modules only, in the usual unix prefix
+# layout so find_package(OpenCV) and the archive merge see the same paths as on iOS.
+set(_opencv_android_args "")
+if (DEPS_ANDROID)
+    set(_opencv_android_args
+        -DBUILD_ANDROID_PROJECTS=OFF
+        -DBUILD_ANDROID_EXAMPLES=OFF
+        -DBUILD_ANDROID_SERVICE=OFF
+        -DWITH_ANDROID_MEDIANDK=OFF
+        -DBUILD_opencv_videoio=OFF
+        -DOPENCV_BIN_INSTALL_PATH=bin
+        -DOPENCV_TEST_INSTALL_PATH=bin
+        -DOPENCV_SAMPLES_BIN_INSTALL_PATH=bin
+        -DOPENCV_LIB_INSTALL_PATH=lib
+        -DOPENCV_LIB_ARCHIVE_INSTALL_PATH=lib
+        -DOPENCV_3P_LIB_INSTALL_PATH=lib/opencv4/3rdparty
+        -DOPENCV_CONFIG_INSTALL_PATH=lib/cmake/opencv4
+        -DOPENCV_INCLUDE_INSTALL_PATH=include/opencv4
+        -DOPENCV_OTHER_INSTALL_PATH=share/opencv4
+        -DOPENCV_SAMPLES_SRC_INSTALL_PATH=share/opencv4/samples
+        -DOPENCV_LICENSES_INSTALL_PATH=share/licenses/opencv4
+        -DOPENCV_TEST_DATA_INSTALL_PATH=share/opencv4/testdata
+        -DOPENCV_DOC_INSTALL_PATH=share/doc/opencv4
+    )
+endif ()
+
 orcaslicer_add_cmake_project(OpenCV
     ${_options}
     URL https://github.com/opencv/opencv/archive/refs/tags/4.6.0.tar.gz
@@ -103,5 +130,6 @@ orcaslicer_add_cmake_project(OpenCV
        -DHAVE_WIN32UI=FALSE
        ${_disable_carotene}
        ${_opencv_ios_args}
+       ${_opencv_android_args}
 )
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The paths the mobile port owns in this fork of OrcaSlicer: the app, the façade and
-// its tests, and the iOS build. Upstream never touches them, so a commit that does is
+// its tests, and the iOS and Android builds. Upstream never touches them, so a commit that does is
 // ours, and every release tool counts commits by them.
 //
 // release-please cannot list paths to include; a package is one directory. The mobile
@@ -30,7 +30,9 @@ export const OWNED_PATHS = [
   'src/mobile',
   'tests/mobile',
   'scripts/build_ios_core.sh',
+  'scripts/build_android_core.sh',
   'deps/deps-ios.cmake',
+  'deps/deps-android.cmake',
   '.github/workflows/build_ios.yml',
   '.github/workflows/mobile_release.yml',
 ]

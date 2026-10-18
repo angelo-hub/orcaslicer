@@ -10,8 +10,9 @@ endif()
 # macOS SDK: its zutil.h takes the classic-Mac branch under TARGET_OS_MAC and
 # does `#define fdopen(fd,mode) NULL`, which then clobbers the SDK's real
 # `fdopen` prototype in <stdio.h> and breaks the build. On macOS use the system
-# zlib (already found by find_package(ZLIB) in deps-unix-common) instead.
-if(APPLE)
+# zlib (already found by find_package(ZLIB) in deps-unix-common) instead; the NDK
+# ships zlib too, and a second copy would only duplicate symbols in the merged core.
+if(APPLE OR DEPS_ANDROID)
     set(_assimp_build_zlib "-DASSIMP_BUILD_ZLIB=OFF")
 else()
     set(_assimp_build_zlib "-DASSIMP_BUILD_ZLIB=ON")
