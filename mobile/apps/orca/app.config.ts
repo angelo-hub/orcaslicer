@@ -74,6 +74,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         LSSupportsOpeningDocumentsInPlace: true,
         UIBackgroundModes: ['processing', 'fetch'],
         BGTaskSchedulerPermittedIdentifiers: ['orca-downloads-continue'],
+        // Only HTTPS and the system's crypto, which is exempt. Declaring it here keeps
+        // App Store Connect from holding each upload for the export compliance question.
+        ITSAppUsesNonExemptEncryption: false,
+        NSLocalNetworkUsageDescription:
+          'Orca Mobile connects to your printers on the local network to send G-code and show print status.',
         // Type identifiers stay the same in every variant: they name file formats,
         // not the app, and both apps can open the same files.
         CFBundleDocumentTypes: [
