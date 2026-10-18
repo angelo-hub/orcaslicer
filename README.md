@@ -10,6 +10,13 @@
 [![Build iOS core](https://github.com/angelo-hub/orcaslicer/actions/workflows/build_ios.yml/badge.svg?branch=main)](https://github.com/angelo-hub/orcaslicer/actions/workflows/build_ios.yml)
 [![Mobile release](https://img.shields.io/github/v/release/angelo-hub/orcaslicer?filter=mobile-*&label=release)](https://github.com/angelo-hub/orcaslicer/releases)
 
+<a href="https://altstore.io/source/raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/source.json?app=io.github.angelohub.orcaslicer">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/mobile/images/altstore-badge-dark.png">
+    <img alt="Download on AltStore" src="docs/mobile/images/altstore-badge-light.png" width="245">
+  </picture>
+</a>
+
 </div>
 
 > **Unofficial.** Orca Mobile is not built, released or endorsed by the OrcaSlicer maintainers. Please report problems with the app [here](https://github.com/angelo-hub/orcaslicer/issues), not upstream. Everything that slices is upstream's work; if you support one project, [support OrcaSlicer](https://github.com/sponsors/SoftFever).
