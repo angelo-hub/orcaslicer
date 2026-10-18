@@ -200,6 +200,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ],
     },
     plugins: [
+      // The iOS 27 SDK stops an app at launch unless it adopts the UIScene life cycle.
+      // SDK 58 templates do; on SDK 57 this moves startup into Expo's scene delegate.
+      ['expo-build-properties', { ios: { enableSceneSupport: true } }],
       'expo-router',
       './plugins/with-no-push-entitlement',
       'expo-notifications',
