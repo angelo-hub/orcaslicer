@@ -6,6 +6,7 @@
 #include "GUI_Utils.hpp"
 
 #include <boost/nowide/cstdio.hpp>
+#include <cstdio>
 #include <boost/filesystem.hpp>
 
 #ifdef __WXGTK2__
@@ -557,16 +558,28 @@ bool BitmapCache::parse_color4(const std::string& scolor, unsigned char* rgba_ou
     return true;
 }
 //BBS Replace svg green with the specified colour
+// nanosvg's hex parser is static inside its implementation block, which lives in
+// libslic3r/NSVGUtils.cpp, so parse "#RRGGBB" / "#RGB" here with the same semantics and the
+// same packed 0x00BBGGRR layout nanosvg stores in NSVGpaint::color.
+static unsigned int parse_svg_hex_color(const char* str)
+{
+    unsigned int r = 0, g = 0, b = 0;
+    if (str != nullptr) {
+        if (std::sscanf(str, "#%2x%2x%2x", &r, &g, &b) == 3)
+            return r | (g << 8) | (b << 16);
+        if (std::sscanf(str, "#%1x%1x%1x", &r, &g, &b) == 3)
+            return (r * 17) | ((g * 17) << 8) | ((b * 17) << 16);
+    }
+    return 128 | (128 << 8) | (128 << 16);
+}
+
 bool BitmapCache::load_from_svg_file_change_color(const std::string &filename, unsigned width, unsigned height, ImTextureID &texture_id, const char *hexColor)
 {
     NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
     if (image == nullptr) {
         return false;
     }
-    char temp_color[8];
-    strncpy(temp_color, hexColor, 7);
-    temp_color[7]             = '\0';
-    unsigned int change_color = nsvg__parseColorHex(temp_color);
+    unsigned int change_color = parse_svg_hex_color(hexColor);
     change_color |= (unsigned int) (1.0f * 255) << 24; // opacity
     unsigned int green_color = 0xFF889600; // #009688
     for (NSVGshape* shape = image->shapes; shape != nullptr; shape = shape->next) {
