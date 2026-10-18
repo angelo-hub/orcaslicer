@@ -8,7 +8,7 @@
 //
 // The block is inserted next to react_native_post_install so it survives
 // re-runs of `expo prebuild`.
-const { withDangerousMod } = require('@expo/config-plugins')
+const { withDangerousMod } = require('expo/config-plugins')
 const fs = require('node:fs')
 const path = require('node:path')
 
