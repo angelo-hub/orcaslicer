@@ -21,17 +21,21 @@ name: Mobile release
 #                   (own bundle id, installs next to the stable app) otherwise.
 #   publish         attaches the .ipa to the release and adds it to the AltStore source
 #                   on the altstore branch (source-beta.json for betas).
+#   app-store-connect  for a stable release, once the ASC_KEY_ID variable is set: a
+#                   team-signed build of the same version uploaded to App Store Connect
+#                   (mobile_app_store_connect.yml), for notarization and AltStore PAL.
 #
 # The build jobs run in this workflow rather than on the release event, because a
 # release created with the workflow's token starts no other workflow.
 #
 # The .ipa is ad-hoc signed, not signed by a team. AltStore and SideStore re-sign with
-# the installing user's own Apple ID, so a real signature would only be stripped again,
-# and it keeps every Apple credential out of the repository's secrets. Ad-hoc signing
-# still matters: it embeds the entitlements (the app group the widget shares, the
-# raised memory limit) that the re-signer copies from the binary. AltStore PAL accepts
-# only apps notarized through App Store Connect; mobile_altstore_pal.yml adds such a
-# build to the PAL source once its ADP is hosted.
+# the installing user's own Apple ID, so a real signature would only be stripped again.
+# Ad-hoc signing still matters: it embeds the entitlements (the app group the widget
+# shares, the raised memory limit) that the re-signer copies from the binary. AltStore
+# PAL accepts only apps notarized through App Store Connect, which is what the
+# app-store-connect job's upload is for, and the only job that uses an Apple credential;
+# mobile_altstore_pal.yml adds the notarized build to the PAL source once its ADP is
+# hosted.
 #
 # The slicing core is not rebuilt here. "Build iOS core" takes hours and its output only
 # changes with the C++ under src/ or deps/, so the ipa job takes the newest
@@ -490,3 +494,16 @@ jobs:
             --size "$(jq -r .size "$meta")" \
             --download-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$ipa" \
             --notes-file release/altstore-notes.txt
+
+  app-store-connect:
+    name: App Store Connect
+    needs: [version, publish]
+    # Off until the API key is configured; betas have their own bundle id and stay out.
+    if: ${{ !failure() && !cancelled() && needs.version.outputs.publish == 'true' && needs.version.outputs.prerelease != 'true' && vars.ASC_KEY_ID != '' }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/mobile_app_store_connect.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+    secrets: inherit
