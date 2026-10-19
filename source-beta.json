@@ -1,0 +1,48 @@
+{
+  "name": "OrcaSlicer Mobile",
+  "identifier": "io.github.angelohub.orcaslicer.beta.source",
+  "subtitle": "OrcaSlicer on iPhone and iPad",
+  "description": "Builds of the OrcaSlicer mobile app, published from GitHub Actions.",
+  "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+  "tintColor": "#009688",
+  "featuredApps": [
+    "io.github.angelohub.orcaslicer.beta"
+  ],
+  "apps": [
+    {
+      "name": "Orca Beta",
+      "bundleIdentifier": "io.github.angelohub.orcaslicer.beta",
+      "developerName": "OrcaSlicer contributors",
+      "subtitle": "Slice and send prints from your phone.",
+      "localizedDescription": "OrcaSlicer on iOS: import STL, 3MF, OBJ and STEP models, pick printer, filament and process presets from the OrcaSlicer profile library, slice on device and send the G-code to Moonraker or OctoPrint.",
+      "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+      "tintColor": "#009688",
+      "category": "utilities",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "0.2.1",
+          "buildVersion": "69",
+          "marketingVersion": "0.2.1-beta.1",
+          "date": "2026-10-19T20:41:42.964Z",
+          "localizedDescription": "Fixes:\n• Adopt the UIScene life cycle so iOS 27 SDK builds launch\n• Declare export compliance and explain local network access\n• Start the altstore branch on the first publish",
+          "downloadURL": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1-beta.1/OrcaMobile-0.2.1-beta.1.ipa",
+          "size": 31635225,
+          "minOSVersion": "16.4"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups",
+          "com.apple.developer.kernel.extended-virtual-addressing",
+          "com.apple.developer.kernel.increased-memory-limit"
+        ],
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "Orca Mobile connects to your printers on the local network to send G-code and show print status."
+        }
+      }
+    }
+  ],
+  "news": [],
+  "nsfw": false
+}
