@@ -1,0 +1,172 @@
+name: Mobile App Store Connect
+
+# Uploads a stable release of the iOS app to App Store Connect, signed by the team, so it
+# can be submitted for notarization (AltStore PAL) or to TestFlight. "Mobile release"
+# calls it after publishing a stable release once ASC_KEY_ID is set; run it by hand to
+# upload a release again, or one published before then.
+#
+# It rebuilds the release tag with the release's build number and slicing core, read from
+# its app-meta.json, so the upload is the same app as the release's .ipa. Xcode signs with
+# certificates and profiles it manages through an App Store Connect API key, so the key is
+# the only credential stored:
+#
+#   ASC_KEY_ID        variable: the key's ID (Users and Access > Integrations > App Store
+#                     Connect API > Team Keys)
+#   ASC_ISSUER_ID     variable: the issuer ID shown above that list
+#   ASC_PRIVATE_KEY   secret: the contents of the key's .p8 file
+#
+# The key needs the Admin role: on first use Xcode creates the distribution certificate
+# and the App Store profiles for the app and its widget extension. An upload whose build
+# number App Store Connect already has is refused.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag (mobile-vX.Y.Z) to upload
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  # gh run download reads the "Build iOS core" run's artifact.
+  actions: read
+
+jobs:
+  upload:
+    name: App Store Connect
+    runs-on: ${{ fromJSON(vars.MOBILE_MACOS_RUNNER || '"macos-26"') }}
+    timeout-minutes: 90
+    concurrency:
+      group: mobile-app-store-connect
+      cancel-in-progress: false
+    env:
+      TAG: ${{ inputs.tag }}
+      APP_VARIANT: production
+      ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+          ref: ${{ inputs.tag }}
+
+      - name: Release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # app.config.ts reads the APP_* variables at prebuild and when Xcode embeds them.
+        run: |
+          set -euo pipefail
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ]; then
+            echo "::error::Set the ASC_KEY_ID and ASC_ISSUER_ID repository variables" >&2
+            exit 1
+          fi
+          gh release download "$TAG" -p app-meta.json -D "$RUNNER_TEMP"
+          meta=$RUNNER_TEMP/app-meta.json
+          cat "$meta"
+          version=$(jq -r .version "$meta")
+          if [ "$(jq -r .marketingVersion "$meta")" != "$version" ]; then
+            echo "::error::$TAG is a prerelease; only stable releases go to App Store Connect" >&2
+            exit 1
+          fi
+          {
+            echo "APP_VERSION=$version"
+            echo "APP_MARKETING_VERSION=$version"
+            echo "APP_BUILD_NUMBER=$(jq -r .buildVersion "$meta")"
+            echo "CORE_RUN=$(jq -r .core.run "$meta")"
+          } >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/mobile-setup
+
+      - name: Fetch the slicing core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The core the release's .ipa was built with. Artifacts expire after 90 days; for
+        # an older release, run "Build iOS core" on its tag and upload from a new release.
+        run: |
+          set -euo pipefail
+          dest=packages/orca-core/ios/OrcaCore.xcframework
+          rm -rf "$dest"
+          gh run download "$CORE_RUN" -n OrcaCore.xcframework -D "$dest"
+          test -f "$dest/ios-arm64/libOrcaCore.a"
+
+      - name: Translation catalogs
+        run: pnpm i18n
+
+      - name: Prebuild
+        working-directory: mobile/apps/orca
+        run: npx expo prebuild -p ios --clean
+
+      - name: API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ASC_PRIVATE_KEY" ]; then
+            echo "::error::Set the ASC_PRIVATE_KEY repository secret" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/asc.p8"
+
+      - name: Archive
+        working-directory: mobile/apps/orca
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild \
+            -workspace ios/OrcaSlicer.xcworkspace \
+            -scheme OrcaSlicer \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/dd \
+            -archivePath build/OrcaSlicer.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            archive
+
+      - name: Upload
+        working-directory: mobile/apps/orca
+        # Exporting with destination "upload" signs for distribution and sends the build to
+        # App Store Connect in one step. The build number stays the release's.
+        run: |
+          set -euo pipefail
+          team=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationProperties:Team' build/OrcaSlicer.xcarchive/Info.plist)
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$team</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/OrcaSlicer.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "Uploaded $TAG ($APP_VERSION, build $APP_BUILD_NUMBER) to App Store Connect" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"
