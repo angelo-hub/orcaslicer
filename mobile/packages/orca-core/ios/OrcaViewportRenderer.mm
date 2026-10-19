@@ -317,9 +317,11 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
   id<MTLSamplerState> _bedSampler;
   MTKTextureLoader* _textureLoader;
   // Multisampled colour and depth targets, resolved into the drawable. Memoryless on
-  // a device, so they live in tile memory and cost no RAM.
+  // a device, so they live in tile memory and cost no RAM, until a frame needs them
+  // stored; see drawInMTKView:.
   id<MTLTexture> _msaaColor;
   id<MTLTexture> _msaaDepth;
+  BOOL _msaaStored;
 
   id<MTLBuffer> _meshBuffer;
   std::vector<MeshRange> _meshRanges;
@@ -991,7 +993,7 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
 #if TARGET_OS_SIMULATOR
       desc.storageMode = MTLStorageModePrivate;
 #else
-      desc.storageMode = MTLStorageModeMemoryless;
+      desc.storageMode = _msaaStored ? MTLStorageModePrivate : MTLStorageModeMemoryless;
 #endif
       return [_device newTextureWithDescriptor:desc];
     };
@@ -1101,6 +1103,23 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
 
   [encoder endEncoding];
   [commands presentDrawable:drawable];
+  // A toolpath with millions of beads overflows the GPU's tiling memory, which then
+  // renders the pass in parts and must store the targets in between. Memoryless
+  // targets can't be stored, so the frame is dropped and the view stays black: from
+  // then on, keep them in memory and draw again.
+  __weak OrcaViewportRenderer* weakSelf = self;
+  [commands addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+    if (buffer.error == nil) return;
+    NSLog(@"OrcaViewport: frame failed: %@", buffer.error);
+    if (buffer.error.code != MTLCommandBufferErrorMemoryless) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      OrcaViewportRenderer* strongSelf = weakSelf;
+      if (strongSelf == nil || strongSelf->_msaaStored) return;
+      strongSelf->_msaaStored = YES;
+      strongSelf->_msaaColor = nil;
+      [strongSelf->_view setNeedsDisplay];
+    });
+  }];
   [commands commit];
 }
 
