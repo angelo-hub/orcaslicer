@@ -137,4 +137,6 @@ dependencies {
   implementation "com.facebook.react:react-native:+"
 
   implementation project(":react-native-nitro-modules")
+  // Rasterizes vendors' SVG bed textures for the viewport.
+  implementation "com.caverock:androidsvg-aar:1.4"
 }
