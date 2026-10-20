@@ -18,6 +18,7 @@ import { Icon } from '@/ui/Icon'
 
 import { useSession } from '@/lib/core'
 import { haptic } from '@/lib/haptics'
+import { discardCopy, PICKER_COPY, pickedPath } from '@/lib/openFile'
 import { useViewportStore } from '@/lib/viewport'
 
 // Full-screen editor. Renders through the router (not a Modal portal) so
@@ -137,20 +138,23 @@ export default function FullscreenScreen(): React.JSX.Element {
 
   const importModel = useCallback(async () => {
     if (session === null) return
+    // See the home screen's importModel for why only Android copies into the cache.
     const picked = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: false,
+      copyToCacheDirectory: PICKER_COPY,
       multiple: false,
     })
     const asset = picked.assets?.[0]
     if (picked.canceled || asset === undefined) return
+    const path = pickedPath(asset)
     setBusy(true)
     try {
-      await session.importModel(decodeURIComponent(asset.uri.replace(/^file:\/\//, '')))
+      await session.importModel(path)
       refresh()
     } catch (error) {
       Alert.alert('Import failed', String(error))
     } finally {
       setBusy(false)
+      discardCopy(path)
     }
   }, [session, refresh])
 
