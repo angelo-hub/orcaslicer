@@ -183,8 +183,10 @@ The pipeline only appends versions and refreshes permissions, so the source's na
 description, screenshots and news can be edited by hand on the `altstore` branch.
 
 AltStore PAL installs only builds Apple notarized for alternative distribution, which
-needs a team-signed upload to App Store Connect. Once its ADP is hosted, the "Mobile
-AltStore PAL" workflow adds it to `source-pal.json`; the steps are in its header.
+needs a team-signed upload to App Store Connect. Once the version is Ready for
+Distribution, run the "Mobile AltStore PAL" workflow with the release tag and the
+version's Alternative Distribution Package ID: it downloads the ADP AltStore processed,
+attaches it to the release and adds it to `source-pal.json`. Its header has the details.
 
 The `.ipa` builds on GitHub's `macos-26` runner unless the `MOBILE_MACOS_RUNNER`
 repository variable names another. `scripts/setup-mac-runner.sh` registers a Mac you own

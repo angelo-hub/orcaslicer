@@ -9,12 +9,15 @@
 //
 // AltStore Classic installs the .ipa itself. AltStore PAL installs only notarized apps:
 // pass --marketplace-id (the Apple ID from App Store Connect) and point --download-url
-// at the ADP's manifest.json instead of an .ipa.
+// at the ADP's manifest.json instead of an .ipa. An ADP hosted as GitHub release assets
+// loses its directory layout, so --asset-urls names a JSON file mapping each of its
+// files (name without extension) to the asset's URL, AltStore's `assetURLs`.
 //
 // Usage: node altstore-source.mjs --source source.json --meta app-meta.json
 //          --version 1.2.0 --marketing 1.2.0-beta.1 --build 42 --size <bytes>
 //          --download-url <url> --notes-file notes.txt --icon-url <url>
-//          [--marketplace-id <id>] [--name "Source name"] [--date <ISO 8601>]
+//          [--marketplace-id <id>] [--asset-urls <file>] [--name "Source name"]
+//          [--date <ISO 8601>]
 //
 // app-meta.json is written by the release workflow's build job from the built .app:
 //   { bundleIdentifier, name, minOSVersion, entitlements: [..], privacy: { key: text } }
@@ -91,6 +94,8 @@ const entry = {
   size: Number(required('size')),
   minOSVersion: meta.minOSVersion,
 }
+const assetURLs = opt('asset-urls')
+if (assetURLs) entry.assetURLs = JSON.parse(readFileSync(assetURLs, 'utf8'))
 // Newest first: AltStore takes versions[0] as the latest.
 app.versions = [
   entry,
