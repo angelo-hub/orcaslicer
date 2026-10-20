@@ -1,0 +1,59 @@
+{
+  "name": "OrcaSlicer Mobile",
+  "identifier": "io.github.angelohub.orcaslicer.source",
+  "subtitle": "OrcaSlicer on iPhone and iPad",
+  "description": "Builds of the OrcaSlicer mobile app, published from GitHub Actions.",
+  "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+  "tintColor": "#009688",
+  "featuredApps": [
+    "io.github.angelohub.orcaslicer"
+  ],
+  "apps": [
+    {
+      "name": "Orca Mobile",
+      "bundleIdentifier": "io.github.angelohub.orcaslicer",
+      "developerName": "OrcaSlicer contributors",
+      "subtitle": "Slice and send prints from your phone.",
+      "localizedDescription": "OrcaSlicer on iOS: import STL, 3MF, OBJ and STEP models, pick printer, filament and process presets from the OrcaSlicer profile library, slice on device and send the G-code to Moonraker or OctoPrint.",
+      "iconURL": "https://raw.githubusercontent.com/angelo-hub/orcaslicer/altstore/icon.png",
+      "tintColor": "#009688",
+      "category": "utilities",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "0.2.1",
+          "buildVersion": "76",
+          "marketingVersion": "0.2.1",
+          "date": "2026-10-20T18:38:49.374Z",
+          "localizedDescription": "Fixes:\n• Keep the viewport drawing large toolpaths on a device\n• Adopt the UIScene life cycle so iOS 27 SDK builds launch\n• Declare export compliance and explain local network access\n• Start the altstore branch on the first publish",
+          "downloadURL": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-manifest.json",
+          "size": 28551214,
+          "minOSVersion": "16.4",
+          "assetURLs": {
+            "manifest": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-manifest.json",
+            "signature": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-signature",
+            "5a42d88f-157c-38a4-b908-916433293a9a": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-5a42d88f-157c-38a4-b908-916433293a9a.ipa",
+            "8c163986-7df5-3b07-a5b6-c763d787a577": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-8c163986-7df5-3b07-a5b6-c763d787a577.ipa",
+            "992ab505-197e-3e97-80a3-fe4f7fa95d42": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-992ab505-197e-3e97-80a3-fe4f7fa95d42.ipa",
+            "af5ba653-8aca-3254-be35-c24331d3a9ee": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-af5ba653-8aca-3254-be35-c24331d3a9ee.ipa",
+            "e98267fd-6ed9-3788-85ce-0000c7e7bfed": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-e98267fd-6ed9-3788-85ce-0000c7e7bfed.ipa",
+            "fc2bc970-4390-3cef-8f52-bfb9650ad049": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/pal-76-fc2bc970-4390-3cef-8f52-bfb9650ad049.ipa"
+          }
+        }
+      ],
+      "marketplaceID": "6824707486",
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups",
+          "com.apple.developer.kernel.extended-virtual-addressing",
+          "com.apple.developer.kernel.increased-memory-limit"
+        ],
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "Orca Mobile connects to your printers on the local network to send G-code and show print status."
+        }
+      }
+    }
+  ],
+  "news": [],
+  "nsfw": false
+}
