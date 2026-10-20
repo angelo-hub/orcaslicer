@@ -28,6 +28,7 @@ BUILD_CONFIG="Release"
 BUILD_ONLY=""
 MERGE=""
 RESUME=""
+KEEP_DEBUG_INFO=""
 
 usage() {
     echo "Usage: ./scripts/build_android_core.sh [options]"
@@ -41,10 +42,12 @@ usage() {
     echo "   -r: Resume deps from a restored prefix and stamps without sources: every"
     echo "       dependency with a pending step is rebuilt from scratch"
     echo "   -x: After building, merge the archives into build/android-core/<abi>/libOrcaCore.a"
+    echo "   -g: Keep debug info in the merged archive (the NDK compiles with -g; stripping"
+    echo "       it takes the archive from several GB to a few hundred MB)"
     echo "   -h: This help"
 }
 
-while getopts ":dsa:m:c:bj:rxh" opt; do
+while getopts ":dsa:m:c:bj:rxgh" opt; do
     case "${opt}" in
         d ) BUILD_TARGET="deps" ;;
         s ) BUILD_TARGET="core" ;;
@@ -55,6 +58,7 @@ while getopts ":dsa:m:c:bj:rxh" opt; do
         j ) export CMAKE_BUILD_PARALLEL_LEVEL="$OPTARG" ;;
         r ) RESUME="1" ;;
         x ) MERGE="1" ;;
+        g ) KEEP_DEBUG_INFO="1" ;;
         h ) usage; exit 0 ;;
         * ) usage; exit 1 ;;
     esac
@@ -262,6 +266,13 @@ merge_core() {
     rm -f "$out"
     # L adds the members of each input archive rather than the archive itself.
     "$ar" qcsL "$out" "${libs[@]}"
+    # The NDK toolchain compiles with -g whatever the configuration, and the DWARF of a
+    # hundred libraries makes the archive several GB. A prebuilt archive the app links
+    # needs the symbols, not the debug info, so it is stripped unless asked otherwise.
+    if [ "1" != "$KEEP_DEBUG_INFO" ]; then
+        "$NDK_BIN/llvm-objcopy" --strip-debug "$out"
+    fi
+    echo "  $(wc -c < "$out" | tr -d ' ') bytes"
 }
 
 make_output() {
