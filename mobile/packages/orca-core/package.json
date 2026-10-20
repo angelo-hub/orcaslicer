@@ -12,6 +12,12 @@
     "ios/**/*.h",
     "ios/**/*.mm",
     "ios/OrcaCore.xcframework",
+    "android/build.gradle",
+    "android/CMakeLists.txt",
+    "android/fix-prefab.gradle",
+    "android/gradle.properties",
+    "android/src",
+    "android/libs/OrcaCore",
     "nitro.json",
     "*.podspec",
     "README.md"

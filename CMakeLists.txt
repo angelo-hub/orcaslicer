@@ -300,6 +300,10 @@ if (APPLE)
     endif ()
 
     message(STATUS "Orca: IS_CROSS_COMPILE: ${IS_CROSS_COMPILE}")
+elseif (ANDROID)
+    # Always a cross build from the host, like iOS: nothing built here can run on it.
+    set(IS_CROSS_COMPILE TRUE)
+    message(STATUS "Orca: IS_CROSS_COMPILE: ${IS_CROSS_COMPILE}")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
 endif ()

@@ -17,7 +17,7 @@ another matter: the app speaks the two open HTTP APIs and nothing proprietary.
 | Area                                                                            | Status        | Notes                                                                                                                                                     |
 | ------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | iPhone and iPad (iOS 16+)                                                       | Supported     | Development, beta and release builds; AltStore source                                                                                                     |
-| Android                                                                         | Not verified  | The Expo project builds the target, nobody has run it                                                                                                     |
+| Android                                                                         | In progress   | The core builds with the NDK and the app runs with a placeholder in place of the 3D view; the Vulkan viewport and the rest of the port are tracked in #23 |
 | Klipper via Moonraker                                                           | Supported     | Status, temperatures, pause / resume / cancel, upload and print, webcam, Mainsail web UI in-app                                                           |
 | OctoPrint                                                                       | Supported     | Same feature set over the OctoPrint API                                                                                                                   |
 | Bambu Lab printers                                                              | Not supported | Slicing with their profiles works; there is no Bambu network plugin or LAN-mode protocol in the app, so G-code goes through the desktop app or an SD card |
@@ -38,6 +38,10 @@ another matter: the app speaks the two open HTTP APIs and nothing proprietary.
 - Node 22 and pnpm 10 (`corepack enable`)
 - The slicing core built for iOS: `./scripts/build_ios_core.sh -a all -x` from the
   repository root, or the `OrcaCore.xcframework` artifact of the "Build iOS core" workflow
+- For Android: the Android SDK with NDK 27.1 and a JDK 17 or newer (Android Studio
+  installs both), and the core built for Android: `./scripts/build_android_core.sh -x`
+  from the repository root (macOS or Linux, no Xcode needed), or the
+  `orca-core-android-arm64-v8a` artifact of the "Build Android core" workflow
 
 ## First run
 
@@ -56,6 +60,20 @@ pnpm expo run:ios --device     # or open ios/OrcaSlicer.xcworkspace in Xcode
 
 The xcframework is never committed; the podspec vendors it from
 `packages/orca-core/ios/OrcaCore.xcframework`.
+
+For Android, the archive and headers go next to the Gradle module instead, and the app
+installs on the running emulator or the connected device:
+
+```sh
+cp -R build/android-core/. mobile/packages/orca-core/android/libs/OrcaCore/
+cd mobile/apps/orca
+pnpm expo prebuild --platform android
+pnpm expo run:android
+```
+
+`android/libs/OrcaCore` is gitignored like the xcframework. The app keeps Android 10 as
+its floor (`expo-build-properties` in `app.config.ts`) and builds for arm64-v8a only,
+the one ABI the core is built for.
 
 ## Checks and hooks
 

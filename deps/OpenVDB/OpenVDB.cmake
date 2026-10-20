@@ -6,9 +6,9 @@ else()
     set(_build_static ON)
 endif()
 
-# Nothing built for iOS runs on the host, so the command line tool is skipped.
+# Nothing built for a mobile target runs on the host, so the command line tool is skipped.
 set(_openvdb_print ON)
-if (DEPS_IOS)
+if (CMAKE_CROSSCOMPILING)
     set(_openvdb_print OFF)
 endif ()
 

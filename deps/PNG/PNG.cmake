@@ -1,15 +1,15 @@
 # The prusaslicer_ prefix keeps our libpng from clashing with a system libpng at
-# link time on desktops, but iOS ships no libpng at all. Skipping the prefix
-# there lets OpenCV's bundled PNG codec resolve against the same libpng — with
-# the prefix, its unprefixed png_* references were unresolved at final link.
-if (DEPS_IOS)
+# link time on desktops, but iOS and Android ship no libpng at all. Skipping the
+# prefix there lets OpenCV's bundled PNG codec resolve against the same libpng —
+# with the prefix, its unprefixed png_* references were unresolved at final link.
+if (DEPS_IOS OR DEPS_ANDROID)
     set(_png_prefix "")
 else ()
     set(_png_prefix "-DPNG_PREFIX=prusaslicer_")
 endif ()
 
-if (APPLE)
-    # Only disable NEON extension for Apple ARM builds, leave it enabled for Raspberry PI.
+if (APPLE OR DEPS_ANDROID)
+    # Only disable NEON extension for Apple and Android ARM builds, leave it enabled for Raspberry PI.
     set(_disable_neon_extension "-DPNG_ARM_NEON=off")
 elseif ("${DEPS_ARCH}" STREQUAL "arm64" AND CMAKE_CXX_COMPILER_ID STREQUAL Clang)
     # libpng's CMake ignores PNG_ARM_NEON on Windows ARM64 and skips the NEON

@@ -658,7 +658,8 @@ target_link_libraries(libslic3r
 if(NOT WIN32)
     # Link freetype for OCCT dependency (CAD operations need font rendering)
     target_link_libraries(libslic3r PRIVATE ${FREETYPE_LIBRARIES})
-    if (NOT APPLE)
+    # Android has no fontconfig; OCCT's font manager scans the system font directories itself.
+    if (NOT APPLE AND NOT ANDROID)
         target_link_libraries(libslic3r PRIVATE fontconfig)
     endif()
 endif()

@@ -21,6 +21,14 @@ if (DEPS_IOS)
     )
 endif ()
 
+# With ANDROID_STL=c++_shared, oneTBB 2021.5 copies libc++_shared.so from
+# sources/cxx-stl/llvm-libc++, a layout NDK r23 removed, and configure fails. A static
+# archive links no STL, so TBB is told c++_static; the headers are the same libc++.
+set(_tbb_android_stl "")
+if (DEPS_ANDROID)
+    set(_tbb_android_stl "-DANDROID_STL=c++_static")
+endif ()
+
 orcaslicer_add_cmake_project(
     TBB
     URL "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.5.0.zip"
@@ -35,6 +43,7 @@ orcaslicer_add_cmake_project(
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         -DCMAKE_DEBUG_POSTFIX=_debug
         ${_tbb_clear_flags}
+        ${_tbb_android_stl}
 )
 
 if (MSVC)

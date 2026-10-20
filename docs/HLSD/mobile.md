@@ -11,16 +11,16 @@ OrcaSlicer's slicing engine, `libslic3r`, has no dependency on wxWidgets or Open
 
 It does not build the GUI library, the CLI executable, the embedded Python runtime, the developer tools or sandboxes. The in-tree libraries that only the GUI uses (`hidapi`, `imguizmo`, the `hints` tool) are skipped as well. Everything else in the root project is left as it is; when the option is off the desktop builds are unaffected. `BUILD_TESTS` still works on a desktop host and adds the `tests/mobile` suite, which slices a real model through the façade against the shipped vendor profiles.
 
-`scripts/build_ios_core.sh` drives the two-stage build for iOS and merges the static archives of one or more slices (device, simulator) into `OrcaCore.xcframework`, whose headers are the façade's headers only.
+`scripts/build_ios_core.sh` drives the two-stage build for iOS and merges the static archives of one or more slices (device, simulator) into `OrcaCore.xcframework`, whose headers are the façade's headers only. `scripts/build_android_core.sh` does the same for one Android ABI with the NDK: the archives are merged with `llvm-ar` into `build/android-core/<abi>/libOrcaCore.a`, with the façade's headers next to it, which the Nitro module's Android build imports.
 
 ## Dependencies
 
-The dependency superbuild in `deps/` gains a platform file, `deps-ios.cmake`, selected when `CMAKE_SYSTEM_NAME` is `iOS`. It forwards the iOS description (system name, sysroot, architecture, deployment target) to every CMake-based dependency, since ExternalProject does not forward it, and sets the flags the autotools and OpenSSL recipes need. `DEPS_MOBILE`, forced on for iOS and available on any host, selects a dependency list that leaves out what the core does not link: wxWidgets, GLEW, GLFW, OpenCSG, libcurl, FFmpeg, Python and wxInspector. A desktop host builds that list to compile the core and run the façade tests natively.
+The dependency superbuild in `deps/` gains a platform file per mobile OS. `deps-ios.cmake`, selected when `CMAKE_SYSTEM_NAME` is `iOS`, forwards the iOS description (system name, sysroot, architecture, deployment target) to every CMake-based dependency, since ExternalProject does not forward it, and sets the flags the autotools and OpenSSL recipes need. `deps-android.cmake`, selected when the NDK's toolchain file has set `ANDROID`, forwards the ABI, platform level and STL the same way, hands the autotools and OpenSSL recipes the NDK's per-API clang wrappers and LLVM binutils (the `<triple>-ar` names autoconf derives from `--host` do not exist in the NDK), and keeps OpenCV in the unix prefix layout instead of its Android SDK layout. On both systems zlib comes from the SDK or NDK rather than the prefix. `DEPS_MOBILE`, forced on for iOS and Android and available on any host, selects a dependency list that leaves out what the core does not link: wxWidgets, GLEW, GLFW, OpenCSG, libcurl, FFmpeg, Python and wxInspector. A desktop host builds that list to compile the core and run the façade tests natively.
 
 Two constraints shape the recipes:
 
-- CMake's built-in iOS support restricts `find_package` to the SDK. The deps prefix is added as a find root with mode `BOTH` so dependencies and the core still find each other, while `CMAKE_IGNORE_PREFIX_PATH` keeps host package managers out.
-- Nothing built for iOS can execute on the build host, so no recipe may run a program it just compiled. The autotools recipes are configured with an explicit `--host` for the same reason.
+- CMake's built-in iOS and Android support restricts `find_package` to the SDK or NDK sysroot. The deps prefix is added as a find root with mode `BOTH` so dependencies and the core still find each other, while `CMAKE_IGNORE_PREFIX_PATH` keeps host package managers out.
+- Nothing built for iOS or Android can execute on the build host, so no recipe may run a program it just compiled. The autotools recipes are configured with an explicit `--host` for the same reason.
 
 ## Layering above the core
 
