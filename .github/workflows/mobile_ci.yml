@@ -127,10 +127,13 @@ jobs:
       # commits that never followed it.
       # Commits before release-please's bootstrap-sha predate the convention too, so a
       # branch that started earlier is checked from that commit on.
+      # A sync/* branch is that merge: everything reachable only through a merge's second
+      # parent is upstream's, so only the fork's own commits on the branch are checked.
       - name: Commits on owned paths
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           start="$BASE"
@@ -138,9 +141,13 @@ jobs:
           if [ -n "$boot" ] && git merge-base --is-ancestor "$boot" "$HEAD" && git merge-base --is-ancestor "$BASE" "$boot"; then
             start="$boot"
           fi
+          upstream=()
+          if [[ "$HEAD_REF" == sync/* ]]; then
+            mapfile -t upstream < <(git rev-list --merges "$start..$HEAD" | sed 's|.*|^&^2|')
+          fi
           mapfile -t owned < <(node scripts/owned-paths.mjs --list | sed 's|^|:/|')
           status=0
-          for sha in $(git log --no-merges --format=%H "$start..$HEAD" -- "${owned[@]}"); do
+          for sha in $(git log --no-merges --format=%H "$start..$HEAD" ${upstream[@]+"${upstream[@]}"} -- "${owned[@]}"); do
             if ! git log -1 --format=%B "$sha" | pnpm exec commitlint; then
               echo "::error::$(git log -1 --format='%h %s' "$sha")"
               status=1
