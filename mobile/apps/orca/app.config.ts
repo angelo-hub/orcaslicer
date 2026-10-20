@@ -168,34 +168,42 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#e9e9e9',
       },
+      // Other apps hand files over as content:// URIs with a MIME type and rarely an
+      // extension in the URI, so the filters match types. Preset bundles and STEP
+      // files arrive as application/octet-stream; the app copies the file and reads
+      // its type from the bytes (lib/openFile.ts). file:// is kept for file managers
+      // that still send it, matched by extension.
       intentFilters: [
         {
           action: 'VIEW',
-          category: ['DEFAULT', 'BROWSABLE'],
+          category: ['DEFAULT'],
           data: [
-            { mimeType: 'model/3mf' },
-            { mimeType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' },
-            { scheme: 'file', host: '*', pathPattern: '.*\\.3mf' },
-            { scheme: 'content', host: '*', mimeType: '*/*' },
-          ],
+            'model/3mf',
+            'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+            'model/stl',
+            'application/sla',
+            'model/obj',
+            'model/step',
+            'application/step',
+            'application/zip',
+            'application/json',
+            'application/octet-stream',
+          ].map((mimeType) => ({ scheme: 'content', mimeType })),
         },
         {
           action: 'VIEW',
-          category: ['DEFAULT', 'BROWSABLE'],
+          category: ['DEFAULT'],
           data: [
-            { scheme: 'file', host: '*', pathPattern: '.*\\.orca_printer' },
-            { scheme: 'file', host: '*', pathPattern: '.*\\.orca_filament' },
-            { scheme: 'file', host: '*', pathPattern: '.*\\.orca_bundle' },
-          ],
-        },
-        {
-          action: 'VIEW',
-          category: ['DEFAULT', 'BROWSABLE'],
-          data: [
-            { mimeType: 'model/stl' },
-            { mimeType: 'application/sla' },
-            { scheme: 'file', host: '*', pathPattern: '.*\\.stl' },
-          ],
+            '3mf',
+            'stl',
+            'obj',
+            'step',
+            'stp',
+            'amf',
+            'orca_printer',
+            'orca_filament',
+            'orca_bundle',
+          ].map((extension) => ({ scheme: 'file', host: '*', pathPattern: `.*\\.${extension}` })),
         },
       ],
     },
