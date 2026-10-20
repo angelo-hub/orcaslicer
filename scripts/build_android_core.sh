@@ -243,6 +243,11 @@ merge_core() {
         skip+=( libqhullstatic_r.a )
     fi
 
+    # OCCT 8 installs its toolkits under lib/occt. A prefix restored from before that
+    # move can still hold OCCT 7's libTK*.a at the top level, which must not be merged
+    # with the newer headers the core compiled against.
+    local occt_dir="$DEPS_PREFIX/lib/occt"
+
     # In-tree libraries live under src/ and deps_src/; a few — semver, today — land
     # in the build tree's top-level lib/ instead.
     local libs=()
@@ -250,12 +255,16 @@ merge_core() {
     while IFS= read -r candidate; do
         name=$(basename "$candidate")
         skipthis=""
+        if [ -d "$occt_dir" ] && [ "$(dirname "$candidate")" = "$DEPS_PREFIX/lib" ] && [[ "$name" == libTK*.a ]]; then
+            skipthis=1
+        fi
         for s in "${skip[@]}"; do [ "$name" = "$s" ] && skipthis=1 && break; done
         [ -z "$skipthis" ] && libs+=("$candidate")
     done < <(
         find "$CORE_BUILD_DIR/src" "$CORE_BUILD_DIR/deps_src" "$CORE_BUILD_DIR/lib" \
             -name '*.a' -type f 2>/dev/null
         find "$DEPS_PREFIX/lib" -maxdepth 1 -name '*.a' -type f 2>/dev/null
+        find "$occt_dir" -maxdepth 1 -name '*.a' -type f 2>/dev/null
     )
     [ -n "$qhull_r_slim" ] && libs+=("$qhull_r_slim")
     if [ "${#libs[@]}" -eq 0 ]; then
