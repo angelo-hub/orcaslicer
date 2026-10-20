@@ -1,9 +1,15 @@
 #include "ArcFitter.hpp"
 #include <sstream>
+#include "Point.hpp"
+#include "Circle.hpp"
+#include "MultiPoint.hpp"
 #include "Polyline.hpp"
+#include "libslic3r.h"
 
 #include <cmath>
 #include <cassert>
+#include <vector>
+#include <cstddef>
 
 namespace Slic3r {
 

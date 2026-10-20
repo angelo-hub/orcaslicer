@@ -50,11 +50,11 @@ const char* category_name(AuditEventCategory category)
     }
 }
 
-// The permission policy: a process can never be spawned on iOS, so that is denied without
-// asking; everything else goes to the app, which persists an allow through the manager.
+// The permission policy: a process can never be spawned or exec'd on iOS, so that is denied
+// without asking; everything else goes to the app, which persists an allow through the manager.
 bool prompt_permission(const PluginPermissionRequest& request)
 {
-    if (request.category == AuditEventCategory::ProcessCreate)
+    if (request.category == AuditEventCategory::ProcessCreate || request.category == AuditEventCategory::ProcessReplace)
         return false;
     const json payload = {
         {"plugin_name", request.plugin_name},
@@ -73,6 +73,7 @@ std::vector<std::string>* permission_list(PluginPermissions& permissions, const 
     if (category == "network_http") return &permissions.network_http;
     if (category == "network_socket") return &permissions.network_socket;
     if (category == "process") return &permissions.process;
+    if (category == "threading") return &permissions.threading;
     return nullptr;
 }
 

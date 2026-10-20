@@ -1,5 +1,5 @@
 if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "4.0")
-    set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
 endif()
 
 #
@@ -24,11 +24,11 @@ endif()
 # therefore, unfortunately, the installation cannot be copied/moved elsewhere without re-installing wxWidgets.
 #
 
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.10)
 if (APPLE)
-    # if CMAKE_OSX_DEPLOYMENT_TARGET is not set, set it to 11.3
+    # if CMAKE_OSX_DEPLOYMENT_TARGET is not set, set it to 12.0 (the lowest Xcode 27 accepts)
     if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version" FORCE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version" FORCE)
     endif ()
     message(STATUS "CMAKE_OSX_DEPLOYMENT_TARGET: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
@@ -37,6 +37,14 @@ endif ()
 if(POLICY CMP0135) # DOWNLOAD_EXTRACT_TIMESTAMP
     cmake_policy(SET CMP0135 NEW)
 endif()
+
+# project() reads this, so set it first. scripts/flatpak/make_deps_tar.sh packs deps/
+# without cmake/, so the file is missing in a Flatpak build.
+set(_rules_override "${CMAKE_CURRENT_LIST_DIR}/../cmake/modules/ClangClShowIncludes.cmake")
+if (EXISTS "${_rules_override}")
+    set(CMAKE_USER_MAKE_RULES_OVERRIDE "${_rules_override}")
+endif ()
+unset(_rules_override)
 
 project(OrcaSlicer-deps)
 
@@ -55,6 +63,7 @@ endif ()
 
 set(DEP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/DL_CACHE CACHE PATH "Path for downloaded source packages.")
 set(FLATPAK FALSE CACHE BOOL "Toggles various build settings for flatpak, like /usr/local in DESTDIR or not building wxwidgets")
+option(SLIC3R_CAD "Build the SolveSpace solver and OCCT ModelingAlgorithms module the parametric Design/CAD tab needs. Must match the main project's SLIC3R_CAD." ON)
 # The dependencies of the slicing core only: no GUI, network-host or plugin libraries.
 # Forced on for iOS; on a desktop host it gives the prefix an ORCA_MOBILE build needs.
 option(DEPS_MOBILE "Build only the dependencies of the slicing core" OFF)
@@ -165,7 +174,7 @@ if (NOT _is_multi AND NOT CMAKE_BUILD_TYPE)
 endif ()
 
 function(orcaslicer_add_cmake_project projectname)
-    cmake_parse_arguments(P_ARGS "FORWARD_CONFIG" "INSTALL_DIR;BUILD_COMMAND;INSTALL_COMMAND" "CMAKE_ARGS" ${ARGN})
+    cmake_parse_arguments(P_ARGS "FORWARD_CONFIG" "INSTALL_DIR;BUILD_COMMAND;INSTALL_COMMAND;SOURCE_DIR" "CMAKE_ARGS" ${ARGN})
 
     # MSVC is true for clang-cl as well, so the sub-build toolchain has to key on the
     # generator. A non-Visual-Studio superbuild passes its own generator down, and with
@@ -194,6 +203,11 @@ function(orcaslicer_add_cmake_project projectname)
 
     if (_dep_msvc_gen)
       set(_gen CMAKE_GENERATOR "${DEP_MSVC_GEN}" CMAKE_GENERATOR_PLATFORM "${DEP_PLATFORM}")
+      # The toolset picks the compiler here, not the CMAKE_<LANG>_COMPILER
+      # forwarded below, so without it a clang-cl superbuild builds with cl.
+      if (CMAKE_GENERATOR_TOOLSET)
+        list(APPEND _gen CMAKE_GENERATOR_TOOLSET "${CMAKE_GENERATOR_TOOLSET}")
+      endif ()
     else()
       set(_gen "")
     endif()
@@ -206,15 +220,21 @@ function(orcaslicer_add_cmake_project projectname)
       set(_build_j "-j${NPROC}")
     endif ()
 
+    set(_source_dir_arg "")
+    if (P_ARGS_SOURCE_DIR)
+        set(_source_dir_arg SOURCE_DIR ${P_ARGS_SOURCE_DIR})
+    endif ()
+
 if (NOT IS_CROSS_COMPILE OR NOT APPLE)
     ExternalProject_Add(
         dep_${projectname}
         EXCLUDE_FROM_ALL    ON
         INSTALL_DIR         ${DESTDIR}
         DOWNLOAD_DIR        ${DEP_DOWNLOAD_DIR}/${projectname}
+        ${_source_dir_arg}
         ${_gen}
         CMAKE_ARGS
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.10
             -DCMAKE_INSTALL_PREFIX:STRING=${DESTDIR}
             -DCMAKE_MODULE_PATH:STRING=${PROJECT_SOURCE_DIR}/../cmake/modules
             -DCMAKE_PREFIX_PATH:STRING=${DESTDIR}
@@ -224,6 +244,7 @@ if (NOT IS_CROSS_COMPILE OR NOT APPLE)
             -DCMAKE_CXX_COMPILER:STRING=${CMAKE_CXX_COMPILER}
             -DCMAKE_C_COMPILER_LAUNCHER:STRING=${CMAKE_C_COMPILER_LAUNCHER}
             -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=${CMAKE_CXX_COMPILER_LAUNCHER}
+            -DCMAKE_USER_MAKE_RULES_OVERRIDE:STRING=${CMAKE_USER_MAKE_RULES_OVERRIDE}
             -DCMAKE_TOOLCHAIN_FILE:STRING=${CMAKE_TOOLCHAIN_FILE}
             -DCMAKE_EXE_LINKER_FLAGS:STRING=${CMAKE_EXE_LINKER_FLAGS}
             -DCMAKE_SHARED_LINKER_FLAGS:STRING=${CMAKE_SHARED_LINKER_FLAGS}
@@ -244,12 +265,14 @@ if (NOT IS_CROSS_COMPILE OR NOT APPLE)
         # note for future devs: shared libs may actually create a size reduction
         # but orcaslicer_deps tends to get really funny regarding linking after that (notably boost)
         # so, as much as I would like to use that, it's not happening
-        ExternalProject_Add_Step(dep_${projectname} free_download_space
-                DEPENDEES download # do after download
-                COMMENT "Freeing Space: Removing source archive"
-                WORKING_DIRECTORY ${DEP_DOWNLOAD_DIR}
-                COMMAND ${CMAKE_COMMAND} -E rm -r ${projectname}
-        )
+        if (NOT P_ARGS_SOURCE_DIR)
+            ExternalProject_Add_Step(dep_${projectname} free_download_space
+                    DEPENDEES download # do after download
+                    COMMENT "Freeing Space: Removing source archive"
+                    WORKING_DIRECTORY ${DEP_DOWNLOAD_DIR}
+                    COMMAND ${CMAKE_COMMAND} -E rm -rf ${projectname}
+            )
+        endif ()
         ExternalProject_Add_Step(dep_${projectname} free_build_space
                 DEPENDEES install # do after install
                 COMMENT "Freeing Space: Removing source and build files"
@@ -263,14 +286,16 @@ else()
         EXCLUDE_FROM_ALL    ON
         INSTALL_DIR         ${DESTDIR}
         DOWNLOAD_DIR        ${DEP_DOWNLOAD_DIR}/${projectname}
+        ${_source_dir_arg}
         ${_gen}
         CMAKE_ARGS
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.10
             -DCMAKE_INSTALL_PREFIX:STRING=${DESTDIR}
             -DCMAKE_PREFIX_PATH:STRING=${DESTDIR}
             -DCMAKE_IGNORE_PREFIX_PATH:STRING=${CMAKE_IGNORE_PREFIX_PATH}
             -DCMAKE_C_COMPILER_LAUNCHER:STRING=${CMAKE_C_COMPILER_LAUNCHER}
             -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=${CMAKE_CXX_COMPILER_LAUNCHER}
+            -DCMAKE_USER_MAKE_RULES_OVERRIDE:STRING=${CMAKE_USER_MAKE_RULES_OVERRIDE}
             -DBUILD_SHARED_LIBS:BOOL=OFF
             ${_cmake_osx_arch}
             "${_configs_line}"
@@ -335,6 +360,12 @@ else()
     include("deps-linux.cmake")
 endif()
 
+# The mobile core has no Design/CAD tab; the main project forces SLIC3R_CAD off under
+# ORCA_MOBILE, and OCCT has to match it.
+if (DEPS_MOBILE)
+    set(SLIC3R_CAD OFF)
+endif ()
+
 if(FLATPAK)
     # flatpak bundles some deps with the layer, so attempt to find them first
     # also, yes, this reduces CI by not needing to vendor certain deps
@@ -374,11 +405,14 @@ include(Boost/Boost.cmake)
 include(Cereal/Cereal.cmake)
 include(Qhull/Qhull.cmake)
 
-# GUI-only rendering libraries; the mobile core does not link them.
+# GUI-only rendering library; the mobile core does not link it.
 if (NOT DEPS_MOBILE)
-    include(GLEW/GLEW.cmake)
     include(GLFW/GLFW.cmake)
-    include(OpenCSG/OpenCSG.cmake)
+endif ()
+set(SLVS_PKG "")
+if (SLIC3R_CAD)
+    include(SLVS/SLVS.cmake)
+    set(SLVS_PKG dep_SLVS)
 endif ()
 
 include(TBB/TBB.cmake)
@@ -397,12 +431,6 @@ include(libnoise/libnoise.cmake)
 
 include(Draco/Draco.cmake)
 
-if (NOT DEPS_MOBILE)
-    include(FFMPEG/FFMPEG.cmake)
-endif ()
-include(Assimp/Assimp.cmake)
-
-
 # I *think* 1.1 is used for *just* md5 hashing?
 # 3.1 has everything in the right place, but the md5 funcs used are deprecated
 # a grep across the repo shows it is used for other things
@@ -412,6 +440,18 @@ if(NOT OPENSSL_FOUND)
     include(OpenSSL/OpenSSL.cmake)
     set(OPENSSL_PKG dep_OpenSSL)
 endif()
+
+if (NOT DEPS_MOBILE)
+    include(FFMPEG/FFMPEG.cmake)
+endif ()
+include(Assimp/Assimp.cmake)
+
+# WebRTC for the GUI's camera streams; the mobile core does not link it.
+set(DATACHANNEL_PKG "")
+if (NOT DEPS_MOBILE)
+    include(DataChannel/DataChannel.cmake)
+    set(DATACHANNEL_PKG dep_DataChannel)
+endif ()
 
 # we don't want to load a "wrong" openssl when loading curl
 # so, just don't even bother
@@ -508,7 +548,7 @@ set(_dep_list
     dep_Draco
     dep_NLopt
     dep_OpenVDB
-    dep_OpenCSG
+    ${SLVS_PKG}
     dep_OpenCV
     dep_Eigen
     dep_CGAL
@@ -523,6 +563,7 @@ set(_dep_list
     dep_wxInspector
     dep_FFMPEG
     dep_Assimp
+    ${DATACHANNEL_PKG}
     )
 
 if (MSVC)

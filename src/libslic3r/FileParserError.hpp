@@ -1,9 +1,11 @@
 #ifndef slic3r_FileParserError_hpp_
 #define slic3r_FileParserError_hpp_
 
+#include "Exception.hpp"
 #include "libslic3r.h"
 #include <sstream>
 
+#include <sstream>
 #include <string>
 #include <boost/filesystem/path.hpp>
 #include <stdexcept>

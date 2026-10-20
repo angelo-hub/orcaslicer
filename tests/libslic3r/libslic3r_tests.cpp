@@ -1,5 +1,10 @@
 #include <catch2/catch_all.hpp>
+#include <vector>
+#include "libslic3r/libslic3r.h"
+#include <string>
+#include <cstdio>
 
+#include <catch2/catch_test_macros.hpp>
 #include "libslic3r/Utils.hpp"
 // nanosvg's core implementation is instantiated in libslic3r/NSVGUtils.cpp; only the
 // rasterizer is left to the program.

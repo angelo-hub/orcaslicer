@@ -54,6 +54,7 @@ if (ORCA_MOBILE_PLUGINS)
         ${_plugin_dir}/host/PluginHostSlicing.cpp
         ${_plugin_dir}/pluginTypes/pages/PagesPluginCapability.cpp
         ${_plugin_dir}/pluginTypes/printerAgent/PrinterAgentPluginCapability.cpp
+        ${_plugin_dir}/pluginTypes/resourceTexture/ResourceTexturePluginCapability.cpp
         ${_plugin_dir}/pluginTypes/script/ScriptPluginCapability.cpp
         ${_plugin_dir}/pluginTypes/slicingPipeline/SlicingPipelinePluginCapability.cpp
     )

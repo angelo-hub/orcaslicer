@@ -1,15 +1,25 @@
 //#include "igl/random_points_on_mesh.h"
 //#include "igl/AABB.h"
 
+#include <functional>
+#include <cstddef>
+#include <cassert>
+#include <cmath>
+#include <math.h>
+#include <algorithm>
+#include <numeric>
+#include <cstdlib>
+#include <limits>
 #include <tbb/parallel_for.h>
 #include <sstream>
 
 #include "SupportPointGenerator.hpp"
 #include "Geometry/ConvexHull.hpp"
 #include "Concurrency.hpp"
-#include "Model.hpp"
 #include "ExPolygon.hpp"
-#include "SVG.hpp"
+#include "libslic3r/SLA/IndexedMesh.hpp"
+#include "libslic3r/SLA/SupportPoint.hpp"
+#include "libslic3r/Polygon.hpp"
 #include "Point.hpp"
 #include "ClipperUtils.hpp"
 #include "Tesselate.hpp"
@@ -18,6 +28,10 @@
 
 #include <iostream>
 #include <random>
+#include <vector>
+#include <utility>
+#include <unordered_map>
+#include "libslic3r/ExtrusionEntity.hpp"
 
 namespace Slic3r {
 namespace sla {
@@ -187,8 +201,8 @@ static std::vector<SupportPointGenerator::MyLayer> make_layers(
                   // Produce 2 bands around the island, a safe band for dangling overhangs
                   // and an unsafe band for sloped overhangs.
                   // These masks include the original island
-                  auto dangl_mask = expand(bottom_polygons, between_layers_offset, ClipperLib::jtSquare);
-                  auto overh_mask = expand(bottom_polygons, slope_offset, ClipperLib::jtSquare);
+                  auto dangl_mask = expand(bottom_polygons, between_layers_offset, jtSquare);
+                  auto overh_mask = expand(bottom_polygons, slope_offset, jtSquare);
 
                   // Absolutely hopeless overhangs are those outside the unsafe band
                   top.overhangs = diff_ex(*top.polygon, overh_mask);

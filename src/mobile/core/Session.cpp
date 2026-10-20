@@ -692,7 +692,7 @@ std::string Session::cloud_push_payload(PresetKind kind, const std::string& name
 
 void Session::cloud_mark_synced(PresetKind kind, const std::string& name, const std::string& setting_id, long long updated_time, const std::string& sync_info)
 {
-    m_impl->collection(kind).set_sync_info_and_save(name, setting_id, sync_info, updated_time);
+    m_impl->collection(kind).set_sync_info_and_save(name, setting_id, sync_info, updated_time, m_impl->user_id);
 }
 
 CloudApplyResult Session::cloud_apply_pull(const std::string& upserts_json)
