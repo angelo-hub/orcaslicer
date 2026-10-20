@@ -13,11 +13,17 @@ function storeFile(): File {
 function isHost(value: unknown): value is PrinterHost {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
+  if (typeof v.id !== 'string' || typeof v.name !== 'string' || typeof v.url !== 'string')
+    return false
+  if (v.kind === 'moonraker' || v.kind === 'octoprint') return true
+  if (v.kind !== 'plugin') return false
+  const p = v.plugin as Record<string, unknown> | undefined
   return (
-    typeof v.id === 'string' &&
-    typeof v.name === 'string' &&
-    (v.kind === 'moonraker' || v.kind === 'octoprint') &&
-    typeof v.url === 'string'
+    typeof p === 'object' &&
+    p !== null &&
+    typeof p.key === 'string' &&
+    typeof p.capability === 'string' &&
+    typeof p.devId === 'string'
   )
 }
 

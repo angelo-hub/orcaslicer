@@ -5,7 +5,9 @@
 #include <nlohmann/json.hpp>
 #include <slic3r/plugin/PluginFsUtils.hpp>
 #include <slic3r/plugin/PythonPluginInterface.hpp>
+#include <functional>
 #include <map>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -18,6 +20,7 @@
 namespace Slic3r {
 
 class DynamicConfig;
+class PresetBundle;
 struct CapabilityConfigEntry
 {
     PluginCapabilityId id;
@@ -91,6 +94,10 @@ public:
 };
 
 EffectiveCapabilityConfig active_capability_config(const PluginCapabilityId& id);
+
+// The preset bundle whose edited presets carry per-preset plugin config. The desktop installs
+// GUI_App's; without one (the unit tests, a headless host) there are no per-preset overrides.
+void set_active_preset_bundle_fn(std::function<const PresetBundle*()> fn);
 
 class PluginConfig
 {

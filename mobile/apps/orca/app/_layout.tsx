@@ -87,6 +87,9 @@ export default function RootLayout(): React.JSX.Element {
             options={{ title: 'Sign in', presentation: 'modal' }}
           />
           <Stack.Screen name="help/[topic]" options={{ title: 'Guide' }} />
+          <Stack.Screen name="plugins/index" options={{ title: 'Plugins' }} />
+          <Stack.Screen name="plugins/[uuid]" options={{ title: 'Plugin' }} />
+          <Stack.Screen name="plugins/page/[key]" options={{ title: 'Plugin page' }} />
         </Stack>
         <ToastHost />
       </CoreProvider>

@@ -3,7 +3,7 @@
 #include <libslic3r/Utils.hpp>
 #include <libslic3r/libslic3r.h>         // GCODEVIEWER_APP_KEY, SLIC3R_APP_KEY (via libslic3r_version.h)
 #include <slic3r/plugin/PluginAuditManager.hpp>
-#include <slic3r/Utils/OrcaCloudServiceAgent.hpp> // secret_constants::USER_SECRET_FILENAME
+#include <slic3r/Utils/SecretConstants.hpp> // secret_constants::USER_SECRET_FILENAME
 
 #include "plugin_test_utils.hpp"
 

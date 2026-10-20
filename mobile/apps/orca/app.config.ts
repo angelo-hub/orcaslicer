@@ -222,6 +222,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-notifications',
       'expo-background-task',
       './plugins/with-swiftui-core-weak-link',
+      './plugins/with-python-runtime',
       ['./plugins/with-development-team', { appleTeamId: 'H69V293M7J' }],
       [
         'expo-widgets',
@@ -260,6 +261,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.extra,
       variant,
       marketingVersion: process.env.APP_MARKETING_VERSION ?? version,
+      // Feature flags, read by lib/flags.ts. Off unless the build says otherwise.
+      plugins: process.env.EXPO_PUBLIC_ORCA_PLUGINS === '1',
     },
   }
 }

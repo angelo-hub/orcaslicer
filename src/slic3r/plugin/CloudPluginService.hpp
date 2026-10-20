@@ -23,6 +23,8 @@ class CloudPluginService
 public:
     void set_cloud_agent(std::shared_ptr<OrcaCloudServiceAgent> agent);
     std::shared_ptr<OrcaCloudServiceAgent> get_cloud_agent() const;
+    // The signed-in user's id, empty without an agent or a login.
+    std::string cloud_user_id() const;
     bool can_fetch_cloud_plugins() const;
     bool fetch_manifests_into_descriptors(std::vector<PluginDescriptor>& descriptors,
                                       std::vector<std::string>& not_found,

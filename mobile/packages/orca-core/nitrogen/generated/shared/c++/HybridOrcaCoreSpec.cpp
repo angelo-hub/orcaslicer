@@ -16,9 +16,35 @@ namespace margelo::nitro::orca {
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("version", &HybridOrcaCoreSpec::getVersion);
       prototype.registerHybridGetter("upstreamCommit", &HybridOrcaCoreSpec::getUpstreamCommit);
+      prototype.registerHybridGetter("pluginsSupported", &HybridOrcaCoreSpec::getPluginsSupported);
       prototype.registerHybridMethod("initialize", &HybridOrcaCoreSpec::initialize);
       prototype.registerHybridMethod("optionDefinitionsJson", &HybridOrcaCoreSpec::optionDefinitionsJson);
       prototype.registerHybridMethod("createSession", &HybridOrcaCoreSpec::createSession);
+      prototype.registerHybridMethod("pluginsInitialize", &HybridOrcaCoreSpec::pluginsInitialize);
+      prototype.registerHybridMethod("pluginsSetCloudUser", &HybridOrcaCoreSpec::pluginsSetCloudUser);
+      prototype.registerHybridMethod("pluginsSetAppLanguage", &HybridOrcaCoreSpec::pluginsSetAppLanguage);
+      prototype.registerHybridMethod("pluginsDiscover", &HybridOrcaCoreSpec::pluginsDiscover);
+      prototype.registerHybridMethod("pluginList", &HybridOrcaCoreSpec::pluginList);
+      prototype.registerHybridMethod("pluginLoad", &HybridOrcaCoreSpec::pluginLoad);
+      prototype.registerHybridMethod("pluginUnload", &HybridOrcaCoreSpec::pluginUnload);
+      prototype.registerHybridMethod("pluginRemove", &HybridOrcaCoreSpec::pluginRemove);
+      prototype.registerHybridMethod("pluginSetCapabilityEnabled", &HybridOrcaCoreSpec::pluginSetCapabilityEnabled);
+      prototype.registerHybridMethod("pluginPermissionGrant", &HybridOrcaCoreSpec::pluginPermissionGrant);
+      prototype.registerHybridMethod("setPluginEventListener", &HybridOrcaCoreSpec::setPluginEventListener);
+      prototype.registerHybridMethod("pluginAnswer", &HybridOrcaCoreSpec::pluginAnswer);
+      prototype.registerHybridMethod("pluginPageHtml", &HybridOrcaCoreSpec::pluginPageHtml);
+      prototype.registerHybridMethod("pluginPageIcon", &HybridOrcaCoreSpec::pluginPageIcon);
+      prototype.registerHybridMethod("pluginPageOpen", &HybridOrcaCoreSpec::pluginPageOpen);
+      prototype.registerHybridMethod("pluginPageClose", &HybridOrcaCoreSpec::pluginPageClose);
+      prototype.registerHybridMethod("pluginPageSend", &HybridOrcaCoreSpec::pluginPageSend);
+      prototype.registerHybridMethod("pluginCheckRefs", &HybridOrcaCoreSpec::pluginCheckRefs);
+      prototype.registerHybridMethod("pluginRunScript", &HybridOrcaCoreSpec::pluginRunScript);
+      prototype.registerHybridMethod("pluginAgentInfo", &HybridOrcaCoreSpec::pluginAgentInfo);
+      prototype.registerHybridMethod("pluginAgentConnect", &HybridOrcaCoreSpec::pluginAgentConnect);
+      prototype.registerHybridMethod("pluginAgentDisconnect", &HybridOrcaCoreSpec::pluginAgentDisconnect);
+      prototype.registerHybridMethod("pluginAgentSend", &HybridOrcaCoreSpec::pluginAgentSend);
+      prototype.registerHybridMethod("pluginAgentPrint", &HybridOrcaCoreSpec::pluginAgentPrint);
+      prototype.registerHybridMethod("pluginAgentCancelPrint", &HybridOrcaCoreSpec::pluginAgentCancelPrint);
     });
   }
 

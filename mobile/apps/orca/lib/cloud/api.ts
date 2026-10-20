@@ -46,7 +46,8 @@ export class CloudRequestError extends Error {
   }
 }
 
-async function request(path: string, init: RequestInit, retry = true): Promise<Response> {
+/** An authenticated call to the cloud API; shared with the plugin catalog. */
+export async function request(path: string, init: RequestInit, retry = true): Promise<Response> {
   const token = await getAccessToken()
   if (token === null) throw new CloudRequestError('Not signed in', 401)
   const res = await fetch(`${CLOUD_API}${path}`, {

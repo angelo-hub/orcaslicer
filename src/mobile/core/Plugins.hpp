@@ -1,0 +1,108 @@
+#pragma once
+
+#include <functional>
+#include <string>
+
+// The Python plugin host, process-wide: one interpreter, one plugin registry, shared by
+// every session. Compiled in when the core is built with ORCA_MOBILE_PLUGINS; otherwise a
+// stub answers every call with "not supported" so the bridge has one shape either way.
+//
+// Calls that touch Python block, and one may wait on the app: a plugin that asks for a
+// permission or shows a message raises an event through the sink and the host waits for
+// answer(). So nothing here may run on the thread that delivers the answer.
+//
+// Errors come back as strings, empty for success, in the style of Session.
+
+namespace Slic3r { namespace Mobile {
+
+// What the host tells the app. `request_id` is non-zero when the host is waiting for
+// answer(); the payload is JSON specific to `kind`:
+//   permission-request  {plugin_name, event, category, targets[]}   answer: "allow" | "deny"
+//   ui-message          {text, title, buttons, icon}                 answer: the button id
+//   ui-progress         {id, title, message, value, maximum, open}   no answer
+//   plugin-state        {}  (a plugin loaded or unloaded; re-read the list)
+struct PluginEvent
+{
+    std::string kind;
+    std::string plugin_key;
+    std::string capability;
+    std::string payload_json;
+    long        request_id = 0;
+};
+
+namespace Plugins {
+
+bool supported();
+
+// Starts the interpreter and the registry. `python_home` holds lib/python3.x (the app
+// bundle's python directory); `cloud_user_id` picks the _subscribed folder to scan.
+// Returns an error, or empty.
+std::string initialize(const std::string& python_home, const std::string& cloud_user_id);
+void        set_cloud_user(const std::string& user_id);
+// What orca.host.app_language() reports to plugins.
+void        set_app_language(const std::string& language);
+
+// Rescans the plugin directories. Returns the discovery error, or empty.
+std::string discover();
+// Every known plugin as a JSON array: key, name, version, installed_version, description,
+// author, cloud_uuid, enabled, loaded, loading, error, dependencies[], capabilities[{name,
+// type, enabled}].
+std::string list_json();
+
+// Loads with the plugin's declared pip dependencies skipped: nothing can install packages
+// on the device. Blocks until the load finishes. Returns the load error, or empty.
+std::string load(const std::string& key);
+bool        unload(const std::string& key);
+// Deletes the plugin's directory. Returns an error, or empty.
+std::string remove(const std::string& key);
+std::string set_capability_enabled(const std::string& key, const std::string& capability, bool enabled);
+
+// Adds or removes one target from a permission list in the plugin's .install_state.json.
+// `category` is fs_read, fs_readwrite, network_http, network_socket or process.
+bool permission_grant(const std::string& key, const std::string& category, const std::string& target, bool granted);
+
+void set_event_sink(std::function<void(const PluginEvent&)> sink);
+void answer(long request_id, const std::string& answer);
+
+int loaded_count();
+
+// What the runtime makes of a preset's plugin references (`name;uuid;capability`, as
+// PrintConfig's `plugins` / `slicing_pipeline_plugin` options carry them). Takes a JSON
+// array of {name, uuid, capability}; returns one of {uuid, capability, state} per entry
+// with state "loaded", "disabled" (loaded, capability switched off), "installed" (on the
+// device, not loaded), "missing", or "error" (loaded, but no such capability). The hooks
+// themselves skip anything unresolved, so this only exists to warn before slicing.
+std::string check_preset_refs(const std::string& refs_json);
+
+// Runs a script capability. Returns JSON {status, message, data, error}; status is
+// "success", "skipped", "recoverable_error" or "fatal_error".
+std::string run_script(const std::string& key, const std::string& capability);
+
+// A loaded printer-connection capability, driven through the operations the app's
+// printer client needs. The plugin owns the connection: what it reports through its
+// message callback arrives as agent-message events ({dev_id, message}), a print's
+// progress as agent-print events ({status, code, message}). Errors come back as
+// strings, empty for success.
+std::string agent_info(const std::string& key, const std::string& capability); // JSON {id,name,version,description} or {error}
+std::string agent_connect(const std::string& key, const std::string& capability, const std::string& dev_id,
+                          const std::string& dev_ip, const std::string& username, const std::string& password, bool use_ssl);
+std::string agent_disconnect(const std::string& key, const std::string& capability);
+std::string agent_send(const std::string& key, const std::string& capability, const std::string& dev_id, const std::string& message_json);
+// Starts a local print; blocks while the plugin uploads. params_json: {dev_id, dev_name, dev_ip,
+// username, password, use_ssl, filename, dst_file, task_name, project_name, plate_index, ...}.
+std::string agent_print(const std::string& key, const std::string& capability, const std::string& params_json);
+void        agent_cancel_print(const std::string& key, const std::string& capability);
+
+// A loaded pages capability, shown by the app in a web view. The page talks to the
+// plugin through page_send (the plugin's on_message) and, once page_open installed the
+// sender, the plugin's post_message arrives as a page-message event whose payload is the
+// JSON the plugin sent. page_close drops the sender when the view goes away.
+std::string page_html(const std::string& key, const std::string& capability, std::string& error);
+std::string page_icon(const std::string& key, const std::string& capability);
+std::string page_open(const std::string& key, const std::string& capability);  // error or ""
+void        page_close(const std::string& key, const std::string& capability);
+std::string page_send(const std::string& key, const std::string& capability, const std::string& message_json);
+
+} // namespace Plugins
+
+}} // namespace Slic3r::Mobile

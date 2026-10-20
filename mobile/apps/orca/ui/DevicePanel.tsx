@@ -218,18 +218,20 @@ function DeviceLive({ host }: { host: PrinterHost }): React.JSX.Element {
         collapsible
         collapseKey={`temps-${host.id}`}
         action={
-          <Pressable
-            onPress={() => {
-              haptic('tap')
-              router.push(`/host/web/${host.id}` as never)
-            }}
-            hitSlop={8}
-            className="rounded-full bg-neutral-100 px-2.5 py-1 active:opacity-70 dark:bg-neutral-800"
-          >
-            <Text className="text-caption font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-              {host.kind === 'moonraker' ? '↗ Mainsail' : '↗ OctoPrint'}
-            </Text>
-          </Pressable>
+          host.kind === 'plugin' ? undefined : (
+            <Pressable
+              onPress={() => {
+                haptic('tap')
+                router.push(`/host/web/${host.id}` as never)
+              }}
+              hitSlop={8}
+              className="rounded-full bg-neutral-100 px-2.5 py-1 active:opacity-70 dark:bg-neutral-800"
+            >
+              <Text className="text-caption font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
+                {host.kind === 'moonraker' ? '↗ Mainsail' : '↗ OctoPrint'}
+              </Text>
+            </Pressable>
+          )
         }
       >
         {s?.sensors !== undefined && s.sensors.length > 0 ? (

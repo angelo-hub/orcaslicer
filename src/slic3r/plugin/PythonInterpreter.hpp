@@ -61,6 +61,10 @@ public:
     // Bundled uv executable path, or empty when uv is not bundled/found.
     static std::string bundled_uv_path();
 
+    // A Python home the host resolved itself (the app bundle on iOS), tried before the
+    // desktop's search locations. Set before initialize().
+    static void set_python_home_override(const std::string& path);
+
     // Python ABI tag for the bundled interpreter, e.g. "cp312".
     static std::string python_abi_tag();
 

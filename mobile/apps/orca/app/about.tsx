@@ -1,10 +1,11 @@
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
-import React, { useMemo } from 'react'
-import { Linking, ScrollView, Text, View } from 'react-native'
+import React, { useMemo, useState } from 'react'
+import { Linking, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { getOrcaCore } from 'react-native-orca-core'
 
 import { buildNumber, marketingVersion } from '@/lib/appInfo'
+import { setPluginsOverride, usePluginsEnabled } from '@/lib/flags'
 import { Button } from '@/ui/Button'
 import { Card } from '@/ui/Card'
 
@@ -45,6 +46,11 @@ export default function AboutScreen(): React.JSX.Element {
   const router = useRouter()
   const version = marketingVersion
   const build = buildNumber
+  // Seven taps on the version line reveal the developer switches, the usual
+  // mobile convention for settings a tester needs and nobody else should see.
+  const [taps, setTaps] = useState(0)
+  const developer = taps >= 7
+  const plugins = usePluginsEnabled()
   // The upstream release and commit compiled into the core, which the upstream sync
   // records; the commit is what tells two builds of a -dev version apart.
   const { engine, upstreamCommit } = useMemo(() => {
@@ -72,10 +78,12 @@ export default function AboutScreen(): React.JSX.Element {
       </Card>
 
       <Card title="Orca Mobile" subtitle={build === '' ? version : `${version} (${build})`}>
-        <Text className="text-subhead leading-5 text-neutral-600 dark:text-neutral-300">
-          An unofficial iOS port of OrcaSlicer. It is not built, released or endorsed by the
-          OrcaSlicer maintainers — please don&apos;t report problems with it to them.
-        </Text>
+        <Pressable onPress={() => setTaps((n) => n + 1)}>
+          <Text className="text-subhead leading-5 text-neutral-600 dark:text-neutral-300">
+            An unofficial iOS port of OrcaSlicer. It is not built, released or endorsed by the
+            OrcaSlicer maintainers — please don&apos;t report problems with it to them.
+          </Text>
+        </Pressable>
         <Text
           className="mt-2 text-subhead leading-5 text-neutral-500 dark:text-neutral-400"
           onPress={
@@ -151,6 +159,27 @@ export default function AboutScreen(): React.JSX.Element {
           <Button title="Storage" variant="secondary" onPress={() => router.push('/storage')} />
         </View>
       </Card>
+      {developer ? (
+        <Card title="Developer" subtitle="Switches for features still being built" padded>
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Text className="text-subhead text-neutral-900 dark:text-neutral-100">
+                Orca Cloud plugins
+              </Text>
+              <Text className="text-footnote text-neutral-500 dark:text-neutral-400">
+                The Plugins screen under Settings. Overrides the build&apos;s default on this
+                device.
+              </Text>
+            </View>
+            <Switch value={plugins} onValueChange={setPluginsOverride} />
+          </View>
+          <Button
+            title="Use the build's defaults"
+            variant="ghost"
+            onPress={() => setPluginsOverride(null)}
+          />
+        </Card>
+      ) : null}
       <Card title="Feedback" padded>
         <View className="items-start gap-2">
           <Text className="text-subhead leading-5 text-neutral-500 dark:text-neutral-400">

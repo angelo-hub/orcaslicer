@@ -38,6 +38,10 @@ on:
         description: Ignore the cached dependency prefix and rebuild it
         type: boolean
         default: false
+      plugins:
+        description: Embed the Python plugin runtime (adds Python.xcframework to the artifact)
+        type: boolean
+        default: false
 
 jobs:
   core:
@@ -157,7 +161,7 @@ jobs:
           exit 1
 
       - name: Build dependencies
-        run: ./scripts/build_ios_core.sh -d -r -a ${{ matrix.slice }}
+        run: ./scripts/build_ios_core.sh -d -r -a ${{ matrix.slice }} ${{ inputs.plugins && '-p' || '' }}
 
       - name: Record the commit the dependency build matches
         if: always()
@@ -178,7 +182,7 @@ jobs:
           key: ios-deps-${{ matrix.slice }}-${{ github.run_id }}
 
       - name: Build core
-        run: ./scripts/build_ios_core.sh -s -a ${{ matrix.slice }} -x
+        run: ./scripts/build_ios_core.sh -s -a ${{ matrix.slice }} -x ${{ inputs.plugins && '-p' || '' }}
 
       - name: Compiler cache statistics
         if: always()

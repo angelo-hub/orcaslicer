@@ -26,7 +26,11 @@ Pod::Spec.new do |s|
   # The renderer's Objective-C interface must be visible to the Swift view.
   s.public_header_files = ["ios/OrcaViewportRenderer.h"]
 
-  s.vendored_frameworks = "ios/OrcaCore.xcframework"
+  # The Python runtime travels with a core built with -p (ORCA_MOBILE_PLUGINS): a dynamic
+  # Python.framework the app embeds. Absent otherwise, and the core's stub reports so.
+  vendored = ["ios/OrcaCore.xcframework"]
+  vendored << "ios/Python.xcframework" if File.directory?(File.join(__dir__, "ios/Python.xcframework"))
+  s.vendored_frameworks = vendored
   # The core is a static archive of C++ code; iconv, libz, liblzma and libc++
   # come from the iOS system so the archive can stay lean. liblzma satisfies
   # openexr's deep-image compressor and CoreGraphics resolves the CG* imports

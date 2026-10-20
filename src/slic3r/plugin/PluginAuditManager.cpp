@@ -1,6 +1,6 @@
 #include "PluginAuditManager.hpp"
 
-#include "../Utils/OrcaCloudServiceAgent.hpp"
+#include "../Utils/SecretConstants.hpp"
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/libslic3r.h" // GCODEVIEWER_APP_KEY, and SLIC3R_APP_KEY via libslic3r_version.h
 
@@ -10,17 +10,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <future>
-#include <slic3r/GUI/BindDialog.hpp>
-#include <slic3r/GUI/GUI_App.hpp>
 #include <slic3r/plugin/PluginFsUtils.hpp>
 #include <slic3r/plugin/PluginManager.hpp>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <wx/event.h>
-#include <wx/msgdlg.h>
 
 namespace Slic3r {
 
@@ -462,46 +457,7 @@ bool PluginAuditManager::request_filesystem_read_permissions(const std::string& 
     if (missing.empty())
         return true;
 
-    if (wxTheApp == nullptr || GUI::wxGetApp().is_closing())
-        return false;
-
-    auto show_dialog = [&descriptor, &missing]() {
-        wxString requested_paths;
-        for (const std::string& path : missing)
-            requested_paths += wxString::FromUTF8(path.c_str()) + "\n";
-
-        wxMessageDialog dialog(
-            nullptr,
-            wxString::Format("Plugin \"%s\" requests filesystem read access to:\n%s",
-                             wxString::FromUTF8(descriptor.name.c_str()), requested_paths),
-            "Plugin permissions",
-            wxYES_NO | wxICON_WARNING);
-        return dialog.ShowModal() == wxID_YES;
-    };
-
-    bool granted = false;
-    if (wxIsMainThread()) {
-        granted = show_dialog();
-    } else {
-        auto result = std::make_shared<std::promise<bool>>();
-        auto future = result->get_future();
-        GUI::wxGetApp().CallAfter([result, descriptor_name = descriptor.name, missing]() {
-            wxString requested_paths;
-            for (const std::string& path : missing)
-                requested_paths += wxString::FromUTF8(path.c_str()) + "\n";
-
-            wxMessageDialog dialog(
-                nullptr,
-                wxString::Format("Plugin \"%s\" requests filesystem read access to:\n%s",
-                                 wxString::FromUTF8(descriptor_name.c_str()), requested_paths),
-                "Plugin permissions",
-                wxYES_NO | wxICON_WARNING);
-            result->set_value(dialog.ShowModal() == wxID_YES);
-        });
-        granted = future.get();
-    }
-
-    if (!granted)
+    if (!prompt_permission({plugin_key, descriptor.name, "fs_read", AuditEventCategory::FsRead, missing}))
         return false;
 
     if (state.plugin_name.empty()) {
@@ -796,35 +752,6 @@ int report_denied(PluginAuditManager&            mgr,
     return -1;
 }
 
-wxString audit_message(AuditEventCategory category, const wxString& plugin_name, const wxString& event_name,
-                       const wxString& target_list)
-{
-    if (target_list.IsEmpty())
-        return wxString::Format(
-            _L("Plugin \"%s\" is requesting permission for the Python audit event \"%s\".\n\n"
-                "This operation does not expose a target the audit hook can display."),
-            plugin_name, event_name);
-
-    switch (category) {
-    case AuditEventCategory::FsRead:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to read the following file(s):\n%s"), plugin_name, target_list);
-    case AuditEventCategory::FsReadWrite:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to read/write the following file(s):\n%s"), plugin_name, target_list);
-    case AuditEventCategory::FsCreate:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to create the following file(s):\n%s"), plugin_name, target_list);
-    case AuditEventCategory::FsDelete:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to delete the following file(s):\n%s"), plugin_name, target_list);
-    case AuditEventCategory::Http:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to make an HTTP request to:\n%s"), plugin_name, target_list);
-    case AuditEventCategory::Socket:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to open a network connection to:\n%s"), plugin_name, target_list);
-    case AuditEventCategory::ProcessCreate:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to run the following command(s):\n%s"), plugin_name, target_list);
-    default:
-        return wxString::Format(_L("Plugin \"%s\" is requesting permission for the Python audit event \"%s\"."), plugin_name, event_name);
-    }
-}
-
 int decide_audited_event(PluginAuditManager&             mgr,
                          PluginInstallState&              state,
                          const std::string&                plugin_key,
@@ -845,15 +772,7 @@ int decide_audited_event(PluginAuditManager&             mgr,
             return 0;
     }
 
-    wxString target_list;
-    for (const auto& target : unresolved)
-        target_list += wxString::FromUTF8(target.c_str()) + "\n";
-
-    wxMessageDialog dialog(nullptr,
-                           audit_message(category, wxString::FromUTF8(plugin_name.c_str()),
-                                        wxString::FromUTF8(event_name.c_str()), target_list),
-                           _L("Plugin permission request"), wxYES_NO | wxICON_WARNING);
-    if (dialog.ShowModal() != wxID_YES)
+    if (!PluginAuditManager::prompt_permission({plugin_key, plugin_name, event_name, category, unresolved}))
         return report_denied(mgr, event_name, {false, "audit permission required"});
 
     if (permission_list)
@@ -865,6 +784,15 @@ int decide_audited_event(PluginAuditManager&             mgr,
 }
 
 } // namespace PluginAuditDetail
+
+PluginPermissionPromptFn PluginAuditManager::s_permission_prompt;
+
+void PluginAuditManager::set_permission_prompt(PluginPermissionPromptFn fn) { s_permission_prompt = std::move(fn); }
+
+bool PluginAuditManager::prompt_permission(const PluginPermissionRequest& request)
+{
+    return s_permission_prompt ? s_permission_prompt(request) : false;
+}
 
 int PluginAuditManager::audit_hook(const char* event, PyObject* args, void* user_data)
 {

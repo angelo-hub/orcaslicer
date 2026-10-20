@@ -36,6 +36,8 @@ import { ObjectDetailSheet } from '@/ui/ObjectDetailSheet'
 import { ObjectToolbar } from '@/ui/ObjectToolbar'
 import { OnboardingSheet } from '@/ui/OnboardingSheet'
 import { PresetPicker } from '@/ui/PresetPicker'
+import { confirmPluginRefs } from '@/lib/plugins/native'
+import { PluginRefsNote } from '@/ui/PluginRefsNote'
 import { PresetRow } from '@/ui/PresetRow'
 import { ProgressBar } from '@/ui/ProgressBar'
 import { useCore } from '@/lib/core'
@@ -574,6 +576,9 @@ export default function HomeScreen(): React.JSX.Element {
 
   const slice = useCallback(async () => {
     if (session === null) return
+    // A preset may name plugins the runtime does not have; the user decides whether to
+    // slice without them.
+    if (!(await confirmPluginRefs(session))) return
     setBusy(true)
     setResult(null)
     setStats(null)
@@ -1092,6 +1097,9 @@ export default function HomeScreen(): React.JSX.Element {
                       last={i === PRESET_KINDS.length - 1}
                     />
                   ))}
+                  {session !== null ? (
+                    <PluginRefsNote session={session} className="px-4 pb-3" />
+                  ) : null}
                 </Card>
 
                 <Card

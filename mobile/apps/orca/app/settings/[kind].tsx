@@ -41,6 +41,7 @@ import {
 import { Button } from '@/ui/Button'
 import { Card } from '@/ui/Card'
 import { Chip } from '@/ui/Chip'
+import { PluginRefsNote } from '@/ui/PluginRefsNote'
 import { PromptSheet } from '@/ui/PromptSheet'
 
 // The parameter editor. Rows are generated from the option definitions the
@@ -389,6 +390,7 @@ export default function SettingsScreen(): React.JSX.Element {
             {currentPreset}
           </Text>
         </Text>
+        <PluginRefsNote session={session} className="mb-2" />
         <View className="flex-row items-center rounded-2xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800">
           <Text className="mr-2 text-subhead text-neutral-400">Search</Text>
           <TextInput

@@ -363,6 +363,18 @@ export interface OrcaSession extends HybridObject<{ ios: 'c++'; android: 'c++' }
   statistics(): SliceStatistics
 }
 
+/**
+ * What the plugin host tells the app; see src/mobile/core/Plugins.hpp for the payloads.
+ * `requestId` is non-zero when the host is waiting for pluginAnswer().
+ */
+export interface PluginEvent {
+  kind: string
+  pluginKey: string
+  capability: string
+  payloadJson: string
+  requestId: number
+}
+
 export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** Version of the slicing core compiled into the app. */
   readonly version: string
@@ -373,4 +385,76 @@ export interface OrcaCore extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   /** Every print, filament and printer option definition as a JSON array; see Session::option_definitions_json. */
   optionDefinitionsJson(): string
   createSession(): OrcaSession
+
+  // The Python plugin host, process-wide; one-to-one with src/mobile/core/Plugins.hpp.
+  // Every call that may enter Python is a Promise: a plugin can block waiting for the
+  // app's answer to an event, so none of them may run on the JS thread.
+
+  /** False when the core was built without the runtime; every other plugin call then reports so. */
+  readonly pluginsSupported: boolean
+  /** Starts the interpreter. `pythonHome` holds lib/python3.x. Resolves to an error, or ''. */
+  pluginsInitialize(pythonHome: string, cloudUserId: string): Promise<string>
+  pluginsSetCloudUser(userId: string): void
+  pluginsSetAppLanguage(language: string): void
+  /** Rescans the plugin directories. Resolves to the discovery error, or ''. */
+  pluginsDiscover(): Promise<string>
+  /** Every known plugin as a JSON array; see Plugins::list_json. */
+  pluginList(): string
+  /** Loads a plugin, skipping pip dependencies. Resolves to the load error, or ''. */
+  pluginLoad(key: string): Promise<string>
+  pluginUnload(key: string): Promise<boolean>
+  /** Deletes the plugin's directory. Resolves to an error, or ''. */
+  pluginRemove(key: string): Promise<string>
+  pluginSetCapabilityEnabled(key: string, capability: string, enabled: boolean): Promise<string>
+  /** Adds or removes one target from a permission list in the plugin's sidecar. */
+  pluginPermissionGrant(key: string, category: string, target: string, granted: boolean): boolean
+  /** The listener may be called from any thread; Nitro delivers it on the JS thread. */
+  setPluginEventListener(listener: (event: PluginEvent) => void): void
+  pluginAnswer(requestId: number, answer: string): void
+
+  // A loaded pages capability. The app shows its HTML in a web view; messages from the
+  // page go to pluginPageSend, and after pluginPageOpen the plugin's post_message arrives
+  // as a 'page-message' event carrying the JSON it sent.
+  /** The page's HTML; rejects when the capability is missing or get_ui() raises. */
+  pluginPageHtml(key: string, capability: string): Promise<string>
+  pluginPageIcon(key: string, capability: string): Promise<string>
+  /** Starts relaying the plugin's messages for this page. Resolves to an error, or ''. */
+  pluginPageOpen(key: string, capability: string): Promise<string>
+  pluginPageClose(key: string, capability: string): void
+  /** Delivers a page message (JSON text) to the plugin's on_message. Resolves to an error, or ''. */
+  pluginPageSend(key: string, capability: string, messageJson: string): Promise<string>
+
+  /**
+   * What the runtime makes of a preset's plugin references: a JSON array of
+   * {name, uuid, capability} in, {uuid, capability, state} out; see Plugins::check_preset_refs.
+   * Touches no Python, so it is synchronous.
+   */
+  pluginCheckRefs(refsJson: string): string
+  /** Runs a script capability. Resolves to JSON {status, message, data, error}. */
+  pluginRunScript(key: string, capability: string): Promise<string>
+
+  // A loaded printer-connection capability, for lib/printers/plugin.ts. The plugin owns
+  // the connection; its messages arrive as 'agent-message' events ({dev_id, message}) and
+  // a print's progress as 'agent-print' events. Each resolves to an error, or ''.
+  /** Resolves to JSON {id, name, version, description}, or {error}. */
+  pluginAgentInfo(key: string, capability: string): Promise<string>
+  pluginAgentConnect(
+    key: string,
+    capability: string,
+    devId: string,
+    devIp: string,
+    username: string,
+    password: string,
+    useSsl: boolean,
+  ): Promise<string>
+  pluginAgentDisconnect(key: string, capability: string): Promise<string>
+  pluginAgentSend(
+    key: string,
+    capability: string,
+    devId: string,
+    messageJson: string,
+  ): Promise<string>
+  /** Starts a local print and resolves when the plugin's upload returns; see Plugins::agent_print for the JSON. */
+  pluginAgentPrint(key: string, capability: string, paramsJson: string): Promise<string>
+  pluginAgentCancelPrint(key: string, capability: string): void
 }

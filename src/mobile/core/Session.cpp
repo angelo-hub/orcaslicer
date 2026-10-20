@@ -4,6 +4,7 @@
 #include "PresetArchive.hpp"
 #include "Thumbnails.hpp"
 #include "UndoStack.hpp"
+#include "plugin/PluginPipeline.hpp"
 
 #include "libslic3r/AABBTreeIndirect.hpp"
 #include "libslic3r/AppConfig.hpp"
@@ -1398,7 +1399,11 @@ SliceResult Session::slice(const ProgressFn& on_progress)
 
     try {
         in_arena([&] {
-            im.current().print.apply(im.current().model, im.bundle.full_config());
+            DynamicPrintConfig config = im.bundle.full_config();
+            // The "plugins" manifest the slicing-pipeline hooks resolve references through; a
+            // no-op unless the plugin runtime installed its resolver.
+            config.update_plugin_manifest();
+            im.current().print.apply(im.current().model, config);
             std::vector<StringObjectException> validation_warnings;
             const StringObjectException        err = im.current().print.validate(&validation_warnings);
             for (const StringObjectException& w : validation_warnings)
@@ -1480,6 +1485,11 @@ std::string Session::export_gcode(const std::string& path)
         return out;
     };
     const std::string written = im.current().print.export_gcode(path, &im.current().gcode_result, thumbnail_cb);
+    // The slicing-pipeline plugins' G-code step, on the exported file in place; throws
+    // when one fails. The preview maps gcode_result, not the file, so it shows the
+    // pre-plugin G-code as the desktop's viewer does.
+    Plugins::post_process_gcode(written, boost::filesystem::path(written).filename().string(),
+                                im.current().print.full_print_config());
     im.current().exported = true;
     return written;
 }

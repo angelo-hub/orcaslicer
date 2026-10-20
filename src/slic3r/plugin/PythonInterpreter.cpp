@@ -1,6 +1,15 @@
 #include "PythonInterpreter.hpp"
-#include "GeneratedConfig.hpp"
 #include "libslic3r/Utils.hpp"
+// The desktop build generates the bundled-tool paths; a host without them searches at runtime.
+#if __has_include("GeneratedConfig.hpp")
+#include "GeneratedConfig.hpp"
+#endif
+#ifndef ORCA_BUNDLED_PYTHON_ROOT
+#define ORCA_BUNDLED_PYTHON_ROOT ""
+#endif
+#ifndef ORCA_BUNDLED_UV_EXECUTABLE
+#define ORCA_BUNDLED_UV_EXECUTABLE ""
+#endif
 #include "PluginAuditManager.hpp"
 #include <boost/filesystem/path.hpp>
 #include <pytypedefs.h>
@@ -157,13 +166,21 @@ std::string format_python_error(PyObject* ptype, PyObject* pvalue, PyObject* ptr
     return result;
 }
 
+// Named after the Python this build links, so one source serves the desktop's 3.12 and a host
+// that embeds a newer runtime.
+#define ORCA_PY_STR_(x) #x
+#define ORCA_PY_STR(x) ORCA_PY_STR_(x)
+#define ORCA_PY_VERSION_NODOT ORCA_PY_STR(PY_MAJOR_VERSION) ORCA_PY_STR(PY_MINOR_VERSION)
+#define ORCA_PY_VERSION_DOTTED ORCA_PY_STR(PY_MAJOR_VERSION) "." ORCA_PY_STR(PY_MINOR_VERSION)
 #ifdef _WIN32
-constexpr const char* PYTHON_DLL       = "python312.dll";
-constexpr const char* PYTHON_DEBUG_DLL = "python312_d.dll";
+constexpr const char* PYTHON_DLL       = "python" ORCA_PY_VERSION_NODOT ".dll";
+constexpr const char* PYTHON_DEBUG_DLL = "python" ORCA_PY_VERSION_NODOT "_d.dll";
 #else
-constexpr const char* PYTHON_STDLIB_DIR = "python3.12";
-constexpr const char* PYTHON_EXECUTABLE = "python3.12";
+constexpr const char* PYTHON_STDLIB_DIR = "python" ORCA_PY_VERSION_DOTTED;
+constexpr const char* PYTHON_EXECUTABLE = "python" ORCA_PY_VERSION_DOTTED;
 #endif
+
+std::string s_python_home_override;
 
 std::string executable_name(const char* base)
 {
@@ -341,6 +358,9 @@ boost::filesystem::path find_bundled_python_home()
 {
     namespace fs = boost::filesystem;
 
+    if (!s_python_home_override.empty() && valid_python_home(s_python_home_override))
+        return s_python_home_override;
+
 #ifdef __APPLE__
     fs::path bundle_python = fs::path(resources_dir()).parent_path() / "MacOS" / "python";
     if (valid_python_home(bundle_python))
@@ -405,6 +425,8 @@ boost::filesystem::path find_python_executable(const boost::filesystem::path& py
 }
 
 } // namespace
+
+void PythonInterpreter::set_python_home_override(const std::string& path) { s_python_home_override = path; }
 
 std::string PythonInterpreter::python_abi_tag()
 {
@@ -546,6 +568,13 @@ bool PythonInterpreter::initialize()
         // runtime used by plugins.
         config.use_environment    = 0;
         config.user_site_directory = 0;
+#ifdef ORCA_MOBILE_PLUGINS
+        // The app bundle is read-only and the process is not ours to signal: keep .pyc
+        // files in the data dir and leave the signal handlers to the app.
+        config.install_signal_handlers = 0;
+        config.write_bytecode          = 1;
+        PyConfig_SetBytesString(&config, &config.pycache_prefix, (fs::path(data_dir()) / "python" / "pycache").string().c_str());
+#endif
 
         BOOST_LOG_TRIVIAL(debug) << "Calling PyConfig_SetBytesString with home=" << python_home;
         PyStatus status = PyConfig_SetBytesString(&config, &config.home, python_home.c_str());
