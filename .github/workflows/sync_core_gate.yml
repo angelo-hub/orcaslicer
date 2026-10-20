@@ -1,0 +1,57 @@
+name: Sync core gate
+
+# A sync/* pull request merges upstream OrcaSlicer into the fork, which is where the mobile
+# core most often breaks. "Build iOS core" runs on push, not as a pull-request check, and the
+# IPA check takes the newest xcframework from any branch, so neither proves the pull request's
+# own core builds. This job waits for the "Build iOS core" run on the head commit and passes
+# only if it succeeded, dispatching one if the push did not start it.
+#
+# Every other pull request skips the job, which a required status check counts as passed.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Sync core builds
+    if: startsWith(github.head_ref, 'sync/')
+    runs-on: ubuntu-latest
+    # A cold dependency build is the long pole; the job only polls.
+    timeout-minutes: 360
+    permissions:
+      actions: write
+    steps:
+      - name: Wait for Build iOS core on the head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          dispatched=false
+          started=$(date +%s)
+          while :; do
+            read -r id status conclusion < <(gh run list --workflow build_ios.yml --commit "$SHA" --limit 1 \
+              --json databaseId,status,conclusion -q '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion)"') || true
+            if [ -n "${id:-}" ]; then
+              if [ "$status" = completed ]; then
+                echo "Build iOS core run $id: $conclusion"
+                echo "https://github.com/$GH_REPO/actions/runs/$id"
+                [ "$conclusion" = success ]
+                exit
+              fi
+              echo "Build iOS core run $id is $status"
+            elif ! $dispatched && [ $(( $(date +%s) - started )) -ge 600 ]; then
+              # The push touched none of the workflow's paths; build the commit anyway.
+              echo "No Build iOS core run for $SHA; dispatching one on $HEAD_REF"
+              gh workflow run build_ios.yml --ref "$HEAD_REF"
+              dispatched=true
+            fi
+            sleep 60
+          done
