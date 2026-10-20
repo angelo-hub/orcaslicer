@@ -34,12 +34,36 @@ add_library(${PACKAGE_NAME} SHARED
             ${android_files}
 )
 
+# The viewport's shaders, compiled to SPIR-V with the NDK's glslc and included into
+# VulkanViewportRenderer.cpp as word lists.
+file(GLOB glslc_hints "${ANDROID_NDK}/shader-tools/*")
+find_program(GLSLC glslc HINTS ${glslc_hints} REQUIRED)
+set(shader_dir "${CMAKE_SOURCE_DIR}/src/main/shaders")
+set(shader_out "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+file(MAKE_DIRECTORY "${shader_out}")
+file(GLOB shader_sources "${shader_dir}/*.vert" "${shader_dir}/*.frag")
+set(shader_outputs "")
+foreach (shader ${shader_sources})
+  get_filename_component(shader_name ${shader} NAME)
+  set(output "${shader_out}/${shader_name}.inc")
+  add_custom_command(
+    OUTPUT "${output}"
+    COMMAND ${GLSLC} --target-env=vulkan1.0 -O -mfmt=num -o "${output}" "${shader}"
+    DEPENDS "${shader}" "${shader_dir}/common.glsl"
+    COMMENT "Compiling ${shader_name} to SPIR-V"
+  )
+  list(APPEND shader_outputs "${output}")
+endforeach ()
+add_custom_target(${PACKAGE_NAME}Shaders DEPENDS ${shader_outputs})
+add_dependencies(${PACKAGE_NAME} ${PACKAGE_NAME}Shaders)
+
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroOrcaCore+autolinking.cmake)
 
 include_directories(
         "src/main/cpp"
         "../cpp"
+        "${shader_out}"
 )
 
 find_library(LOG_LIB log)
@@ -50,5 +74,7 @@ target_link_libraries(
         ${LOG_LIB}
         OrcaCore
         android
+        jnigraphics
+        vulkan
         z
 )

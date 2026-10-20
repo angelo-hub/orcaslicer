@@ -1,7 +1,8 @@
 import type { HybridView, HybridViewMethods, HybridViewProps } from 'react-native-nitro-modules'
 
-// The 3D viewport. A Metal view on iOS that reads geometry straight from the native
-// session (found by id), so no mesh or toolpath data crosses the JavaScript boundary.
+// The 3D viewport. A Metal view on iOS and a Vulkan one on Android that reads geometry
+// straight from the native session (found by id), so no mesh or toolpath data crosses the
+// JavaScript boundary.
 
 export type ViewportMode = 'scene' | 'preview'
 
@@ -79,5 +80,4 @@ export interface OrcaViewportMethods extends HybridViewMethods {
   setObjectTool(tool: ObjectTool): void
 }
 
-// iOS only for now; the Android (OpenGL ES) view comes with the Android port.
-export type OrcaViewport = HybridView<OrcaViewportProps, OrcaViewportMethods, { ios: 'swift' }>
+export type OrcaViewport = HybridView<OrcaViewportProps, OrcaViewportMethods, { ios: 'swift'; android: 'kotlin' }>
