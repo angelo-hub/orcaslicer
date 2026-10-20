@@ -9,10 +9,11 @@
 #
 #   { root, version, build, size, files: [paths relative to root] }
 #
-# version and build are CFBundleShortVersionString and CFBundleVersion read from a
-# variant's Info.plist, which AltStore checks the source entry against, so they come from
-# the package itself rather than from whatever the release or App Store Connect calls it.
-# size is that variant's, as AltStore's docs ask.
+# version and build are the manifest's shortVersionString and bundleVersion, the build's
+# CFBundleShortVersionString and CFBundleVersion, which AltStore checks the source entry
+# against, so they come from the package itself rather than from whatever the release or
+# App Store Connect calls it. The variants are encrypted, so the manifest is the only
+# place to read them. size is the first variant's, as AltStore's docs ask.
 #
 # Usage: fetch-altstore-adp.sh <ADP ID> <output directory>
 # The ADP ID is under Distribution > History in App Store Connect, next to the version.
@@ -46,17 +47,13 @@ if [ -z "$manifest" ]; then
 fi
 root=$(dirname "$manifest")
 
-variant=$(find "$root" -name '*.ipa' -print -quit)
-if [ -z "$variant" ]; then
-  echo "::error::No .ipa variant in the ADP; files: $(cd "$root" && find . -type f | head -20)" >&2
+version=$(jq -r '.shortVersionString // empty' "$manifest")
+build=$(jq -r '.bundleVersion // empty' "$manifest")
+variant=$root/$(jq -r '.variants[0].assetPath // empty' "$manifest")
+if [ -z "$version" ] || [ -z "$build" ] || [ ! -f "$variant" ]; then
+  echo "::error::The ADP's manifest.json lacks shortVersionString, bundleVersion or a variant on disk" >&2
   exit 1
 fi
-plist=$(unzip -Z1 "$variant" | grep -E '^Payload/[^/]+\.app/Info\.plist$' | head -1)
-read -r version build < <(unzip -p "$variant" "$plist" | python3 -I -c '
-import plistlib, sys
-info = plistlib.loads(sys.stdin.buffer.read())
-print(info["CFBundleShortVersionString"], info["CFBundleVersion"])
-')
 
 (cd "$root" && find . -type f | sed 's|^\./||' | sort) | jq -R . | jq -s \
   --arg root "$root" --arg version "$version" --arg build "$build" \
