@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.0](https://github.com/angelo-hub/orcaslicer/compare/mobile-v0.2.1...mobile-v0.3.0) (2026-10-20)
+
+
+### Features
+
+* **mobile:** add the Android module of the Nitro package and an Android app build ([1dc43cf](https://github.com/angelo-hub/orcaslicer/commit/1dc43cfa126345dbafbb8a974e9468e32e5cdba7))
+* **mobile:** add the Android module of the Nitro package and an Android app build ([67e8c79](https://github.com/angelo-hub/orcaslicer/commit/67e8c79a9bf318c237031d918e4cb68ef01616b1))
+* **mobile:** build the slicing core for Android with the NDK ([552c63a](https://github.com/angelo-hub/orcaslicer/commit/552c63a9a8f96e958be54997c4a544490adf7356))
+* **mobile:** embed the python plugin runtime in the core ([c24ed65](https://github.com/angelo-hub/orcaslicer/commit/c24ed653f8999a83ca627922e86f2aad1ec3fc73))
+* **mobile:** orca cloud plugin catalog behind a feature flag ([654d80c](https://github.com/angelo-hub/orcaslicer/commit/654d80cdab2b34b75b84c12a237ffe53a4cfecd6))
+* **mobile:** printer-connection plugins as a destination kind ([dccdf7c](https://github.com/angelo-hub/orcaslicer/commit/dccdf7c0993f595fd98b2b92f26c895125fa2d41))
+* **mobile:** printer-connection plugins as a destination kind ([b7c2a40](https://github.com/angelo-hub/orcaslicer/commit/b7c2a40b702a10c7dcb27310dc7b2dea2c31d473))
+* **mobile:** run slicing-pipeline and script plugins ([e8a31bf](https://github.com/angelo-hub/orcaslicer/commit/e8a31bf1edce217245d794ba9de0e35ca98dbc92))
+* **mobile:** show plugin pages in the app ([d865518](https://github.com/angelo-hub/orcaslicer/commit/d8655185a3bd25f723a075664ade4444a12f3a9b))
+* upgrade slicer to OrcaSlicer v2.5.0-alpha ([620db6d](https://github.com/angelo-hub/orcaslicer/commit/620db6d67443b9542de6be5ab3cf07deda6f2b68))
+* upgrade slicer to OrcaSlicer v2.5.0-alpha ([c1b724c](https://github.com/angelo-hub/orcaslicer/commit/c1b724ceb85d86eb65d5e0ce2177f3f694ddc537))
+
+
+### Fixes
+
+* **mobile:** keep a capped slice from waiting forever on its thread barrier ([ec59164](https://github.com/angelo-hub/orcaslicer/commit/ec59164de8463d3eb79be2e6015a28cd3e6991e0))
+* **mobile:** keep a capped slice from waiting forever on its thread barrier ([e1ad89d](https://github.com/angelo-hub/orcaslicer/commit/e1ad89db7c2442ddd185934d3e42d2b4753e816b))
+* **mobile:** merge OCCT 8's libraries from lib/occt into the core archive ([1950350](https://github.com/angelo-hub/orcaslicer/commit/19503506f8496ec164b534007d46f7f82207079e))
+* **mobile:** merge OCCT 8's libraries from lib/occt into the core archive ([fea9dc6](https://github.com/angelo-hub/orcaslicer/commit/fea9dc6c70de3ec6ab6742f0ccfcda20310210c9))
+* **mobile:** read the PAL build's version from the ADP manifest ([27e37d7](https://github.com/angelo-hub/orcaslicer/commit/27e37d759cad2987abee6a76a63b47e1e26c177b))
+* **mobile:** read the PAL build's version from the ADP manifest ([7b3eb13](https://github.com/angelo-hub/orcaslicer/commit/7b3eb13774929a02651ae5ea57f5356e9cec0cf5))
+* **mobile:** restore portrait after fullscreen and drop a doubled percent unit ([35f47c2](https://github.com/angelo-hub/orcaslicer/commit/35f47c2b93310bd89e29507abc1a993c13b1992d))
+* **mobile:** restore portrait after fullscreen and drop a doubled percent unit ([b44f859](https://github.com/angelo-hub/orcaslicer/commit/b44f8595c546c8675c0e9a1d5d8f4a18e377e47b))
+* **mobile:** strip debug info from the merged Android archive ([aa67cdd](https://github.com/angelo-hub/orcaslicer/commit/aa67cdd8854bf1c71d3d3a52807efd7539d44f85))
+
 ## [0.2.1](https://github.com/angelo-hub/orcaslicer/compare/mobile-v0.2.0...mobile-v0.2.1) (2026-10-19)
 
 
