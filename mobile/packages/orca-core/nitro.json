@@ -19,6 +19,10 @@
       "ios": {
         "language": "swift",
         "implementationClassName": "HybridOrcaViewport"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridOrcaViewport"
       }
     }
   },

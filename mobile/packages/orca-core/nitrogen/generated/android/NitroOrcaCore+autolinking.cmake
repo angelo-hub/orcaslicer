@@ -38,7 +38,8 @@ target_sources(
   ../nitrogen/generated/shared/c++/HybridOrcaViewportSpec.cpp
   ../nitrogen/generated/shared/c++/views/HybridOrcaViewportComponent.cpp
   # Android-specific Nitrogen C++ sources
-  
+  ../nitrogen/generated/android/c++/JHybridOrcaViewportSpec.cpp
+  ../nitrogen/generated/android/c++/views/JHybridOrcaViewportStateUpdater.cpp
 )
 
 # From node_modules/react-native/ReactAndroid/cmake-utils/folly-flags.cmake

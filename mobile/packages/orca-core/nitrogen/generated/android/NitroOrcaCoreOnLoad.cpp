@@ -15,7 +15,11 @@
 #include <fbjni/fbjni.h>
 #include <NitroModules/HybridObjectRegistry.hpp>
 
+#include "JHybridOrcaViewportSpec.hpp"
+#include "JFunc_void_double_double.hpp"
+#include "views/JHybridOrcaViewportStateUpdater.hpp"
 #include "HybridOrcaCore.hpp"
+#include <NitroModules/DefaultConstructableObject.hpp>
 
 namespace margelo::nitro::orca {
 
@@ -25,14 +29,23 @@ int initialize(JavaVM* vm) {
   });
 }
 
-
+struct JHybridOrcaViewportSpecImpl: public jni::JavaClass<JHybridOrcaViewportSpecImpl, JHybridOrcaViewportSpec::JavaPart> {
+  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/orca/HybridOrcaViewport;";
+  static std::shared_ptr<JHybridOrcaViewportSpec> create() {
+    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridOrcaViewportSpecImpl::javaobject()>();
+    jni::local_ref<JHybridOrcaViewportSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
+    return javaPart->getJHybridOrcaViewportSpec();
+  }
+};
 
 void registerAllNatives() {
   using namespace margelo::nitro;
   using namespace margelo::nitro::orca;
 
   // Register native JNI methods
-  
+  margelo::nitro::orca::JHybridOrcaViewportSpec::CxxPart::registerNatives();
+  margelo::nitro::orca::JFunc_void_double_double_cxx::registerNatives();
+  margelo::nitro::orca::views::JHybridOrcaViewportStateUpdater::registerNatives();
 
   // Register Nitro Hybrid Objects
   HybridObjectRegistry::registerHybridObjectConstructor(
@@ -42,6 +55,12 @@ void registerAllNatives() {
                     "The HybridObject \"HybridOrcaCore\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridOrcaCore>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "OrcaViewport",
+    []() -> std::shared_ptr<HybridObject> {
+      return JHybridOrcaViewportSpecImpl::create();
     }
   );
 }
