@@ -21,6 +21,16 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "0.2.1",
+          "buildVersion": "76",
+          "marketingVersion": "0.2.1",
+          "date": "2026-10-20T00:28:42.728Z",
+          "localizedDescription": "Fixes:\n• Keep the viewport drawing large toolpaths on a device\n• Adopt the UIScene life cycle so iOS 27 SDK builds launch\n• Declare export compliance and explain local network access\n• Start the altstore branch on the first publish",
+          "downloadURL": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.2.1/OrcaMobile-0.2.1.ipa",
+          "size": 31635537,
+          "minOSVersion": "16.4"
+        },
+        {
           "version": "0.2.0",
           "buildVersion": "41",
           "marketingVersion": "0.2.0",
@@ -37,7 +47,9 @@
           "com.apple.developer.kernel.extended-virtual-addressing",
           "com.apple.developer.kernel.increased-memory-limit"
         ],
-        "privacy": {}
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "Orca Mobile connects to your printers on the local network to send G-code and show print status."
+        }
       }
     }
   ],
