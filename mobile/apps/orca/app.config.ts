@@ -204,6 +204,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // SDK 58 templates do; on SDK 57 this moves startup into Expo's scene delegate.
       ['expo-build-properties', { ios: { enableSceneSupport: true } }],
       'expo-router',
+      [
+        'expo-build-properties',
+        {
+          android: {
+            // Android 10 is the floor: Vulkan 1.1, which the viewport needs, is expected on
+            // 64-bit devices from there. Printers speak plain HTTP (Moonraker, OctoPrint,
+            // webcams), which release builds otherwise block. The slicing core is built for
+            // arm64-v8a only (scripts/build_android_core.sh).
+            minSdkVersion: 29,
+            usesCleartextTraffic: true,
+            buildArchs: ['arm64-v8a'],
+          },
+        },
+      ],
       './plugins/with-no-push-entitlement',
       'expo-notifications',
       'expo-background-task',
