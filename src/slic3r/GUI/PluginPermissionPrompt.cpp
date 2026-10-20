@@ -14,7 +14,7 @@ namespace Slic3r::GUI {
 namespace {
 
 wxString audit_message(AuditEventCategory category, const wxString& plugin_name, const wxString& event_name,
-                       const wxString& target_list)
+                       const wxString& target_list, size_t target_count)
 {
     if (target_list.IsEmpty())
         return wxString::Format(
@@ -24,19 +24,33 @@ wxString audit_message(AuditEventCategory category, const wxString& plugin_name,
 
     switch (category) {
     case AuditEventCategory::FsRead:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to read the following file(s):\n%s"), plugin_name, target_list);
+        return wxString::Format(_L_PLURAL("Plugin \"%s\" is requesting to read the following file:\n%s",
+                                          "Plugin \"%s\" is requesting to read the following files:\n%s", target_count),
+                                plugin_name, target_list);
     case AuditEventCategory::FsReadWrite:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to read/write the following file(s):\n%s"), plugin_name, target_list);
+        return wxString::Format(_L_PLURAL("Plugin \"%s\" is requesting to read/write the following file:\n%s",
+                                          "Plugin \"%s\" is requesting to read/write the following files:\n%s", target_count),
+                                plugin_name, target_list);
     case AuditEventCategory::FsCreate:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to create the following file(s):\n%s"), plugin_name, target_list);
+        return wxString::Format(_L_PLURAL("Plugin \"%s\" is requesting to create the following file:\n%s",
+                                          "Plugin \"%s\" is requesting to create the following files:\n%s", target_count),
+                                plugin_name, target_list);
     case AuditEventCategory::FsDelete:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to delete the following file(s):\n%s"), plugin_name, target_list);
+        return wxString::Format(_L_PLURAL("Plugin \"%s\" is requesting to delete the following file:\n%s",
+                                          "Plugin \"%s\" is requesting to delete the following files:\n%s", target_count),
+                                plugin_name, target_list);
     case AuditEventCategory::Http:
         return wxString::Format(_L("Plugin \"%s\" is requesting to make an HTTP request to:\n%s"), plugin_name, target_list);
     case AuditEventCategory::Socket:
         return wxString::Format(_L("Plugin \"%s\" is requesting to open a network connection to:\n%s"), plugin_name, target_list);
     case AuditEventCategory::ProcessCreate:
-        return wxString::Format(_L("Plugin \"%s\" is requesting to run the following command(s):\n%s"), plugin_name, target_list);
+        return wxString::Format(_L_PLURAL("Plugin \"%s\" is requesting to run the following command:\n%s",
+                                          "Plugin \"%s\" is requesting to run the following commands:\n%s", target_count),
+                                plugin_name, target_list);
+    case AuditEventCategory::Threading:
+        return wxString::Format(_L("Plugin \"%s\" is requesting permission to create a thread."), plugin_name);
+    case AuditEventCategory::ProcessReplace:
+        return wxString::Format(_L("Plugin \"%s\" is requesting to replace the running application with:\n%s"), plugin_name, target_list);
     default:
         return wxString::Format(_L("Plugin \"%s\" is requesting permission for the Python audit event \"%s\"."), plugin_name, event_name);
     }
@@ -50,7 +64,7 @@ bool show_dialog(const PluginPermissionRequest& request)
 
     wxMessageDialog dialog(nullptr,
                            audit_message(request.category, wxString::FromUTF8(request.plugin_name.c_str()),
-                                         wxString::FromUTF8(request.event_name.c_str()), target_list),
+                                         wxString::FromUTF8(request.event_name.c_str()), target_list, request.targets.size()),
                            _L("Plugin permission request"), wxYES_NO | wxICON_WARNING);
     return dialog.ShowModal() == wxID_YES;
 }
@@ -63,6 +77,20 @@ bool prompt_plugin_permission(const PluginPermissionRequest& request)
         return false;
     if (wxIsMainThread())
         return show_dialog(request);
+
+    // An audited event can fire on the slicing worker, which BackgroundSlicingProcess::stop() parks
+    // the UI thread waiting on, so blocking it on a marshaled modal would deadlock. Deny the event
+    // (fail closed, like an unanswered prompt) and ask asynchronously instead. The plugin-load worker
+    // that requests filesystem access up front is safe to block.
+    if (request.grant_later) {
+        wxGetApp().CallAfter([request] {
+            if (wxTheApp == nullptr || wxGetApp().is_closing())
+                return;
+            if (show_dialog(request))
+                request.grant_later();
+        });
+        return false;
+    }
 
     auto result = std::make_shared<std::promise<bool>>();
     auto future = result->get_future();

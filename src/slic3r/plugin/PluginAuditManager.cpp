@@ -3,19 +3,27 @@
 #include "../Utils/SecretConstants.hpp"
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/libslic3r.h" // GCODEVIEWER_APP_KEY, and SLIC3R_APP_KEY via libslic3r_version.h
+#include "libslic3r_version.h"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/log/trivial.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdlib>
+#include <memory>
+#include <mutex>
 #include <slic3r/plugin/PluginFsUtils.hpp>
 #include <slic3r/plugin/PluginManager.hpp>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "slic3r/plugin/PluginDescriptor.hpp"
 
 namespace Slic3r {
 
@@ -98,6 +106,11 @@ static const std::unordered_map<std::string, AuditEventCategory> audit_event_cat
     {"subprocess.Popen", AuditEventCategory::ProcessCreate},
     {"_winapi.CreateProcess", AuditEventCategory::ProcessCreate},
     {"_posixsubprocess.fork_exec", AuditEventCategory::ProcessCreate},
+
+    // threading
+    {"_thread.start_new_thread", AuditEventCategory::Threading},
+    // processreplace: exec* replaces the current process image rather than spawning a child
+    {"os.exec", AuditEventCategory::ProcessReplace},
 };
 
 // Returns the category event_name belongs to, or AuditEventCategory::None when it isn't audited.
@@ -329,8 +342,20 @@ std::vector<std::string> PluginAuditManager::default_denied_path_keywords()
     // must never be able to reach a secret, a certificate, or a configuration file just because
     // it happens to live inside an otherwise-allowed root (e.g. the bundled TLS client cert at
     // resources_dir()/cert/..., which would become reachable the moment resources_dir() is
-    // granted as a read-only allowed root).
-    return {"secret", "cert", "conf"};
+    // granted as a read-only allowed root). Match as whole path components, not substrings, so
+    // imports such as numpy/__config__.py and stdlib configparser.py remain usable.
+    return {"secret", "secrets", "cert", "certs", "certificate", "certificates", "conf", "config"};
+}
+
+static bool has_denied_config_extension(std::string name)
+{
+    const size_t stream_pos = name.find(':');
+    if (stream_pos != std::string::npos)
+        name.erase(stream_pos);
+
+    const boost::filesystem::path path(name);
+    const std::string extension = path.extension().string();
+    return extension == ".conf" || extension == ".ini";
 }
 
 bool PluginAuditManager::is_denied_path_keyword(const boost::filesystem::path& candidate) const
@@ -355,7 +380,7 @@ bool PluginAuditManager::is_denied_path_keyword(const boost::filesystem::path& c
             continue;
         std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
         for (const auto& keyword : m_denied_path_keywords) {
-            if (name.find(keyword) != std::string::npos)
+            if (name == keyword || (keyword == "conf" && has_denied_config_extension(name)))
                 return true;
         }
     }
@@ -652,6 +677,7 @@ static const std::unordered_map<std::string, std::vector<Py_ssize_t>> audit_targ
     {"pty.spawn", {0}},
     {"_winapi.CreateProcess", {1, 0}},
     {"_posixsubprocess.fork_exec", {0}},
+    {"os.exec", {0}},
 };
 
 AuditEventCategory open_category(PyObject* args)
@@ -679,6 +705,12 @@ std::vector<std::string> audit_targets(const std::string& event_name, AuditEvent
         }
         return targets;
     }
+    case AuditEventCategory::Threading:
+        // Thread creation exposes no user-supplied target. Use a fixed sentinel so the grant
+        // persists per plugin: the permission list matches targets by exact string, and the
+        // started function's repr embeds an address that changes every run.
+        targets.emplace_back("thread");
+        return targets;
     default:
         break;
     }
@@ -705,6 +737,8 @@ std::vector<std::string>* permission_list_for(AuditEventCategory category, Plugi
     case AuditEventCategory::Http:          return &permissions.network_http;
     case AuditEventCategory::Socket:        return &permissions.network_socket;
     case AuditEventCategory::ProcessCreate: return &permissions.process;
+    case AuditEventCategory::Threading:     return &permissions.threading;
+    case AuditEventCategory::ProcessReplace: return &permissions.process;
     default:                                return nullptr;
     }
 }
@@ -740,7 +774,8 @@ bool persist_permission(const std::string&        plugin_key,
 
 int report_denied(PluginAuditManager&            mgr,
                   const std::string&             event_name,
-                  const AuditDecision&           decision)
+                  const AuditDecision&           decision,
+                  const std::string&             target = {})
 {
     AuditViolation violation;
     violation.plugin_key = mgr.current_plugin();
@@ -748,8 +783,30 @@ int report_denied(PluginAuditManager&            mgr,
     violation.reason     = decision.reason;
     mgr.report_violation(violation);
 
-    PyErr_SetString(PyExc_PermissionError, "Plugin attempted an audited operation without permission");
+    std::string message = "Plugin attempted audited operation \"" + event_name + "\" without permission";
+    if (!decision.reason.empty())
+        message += ": " + decision.reason;
+    if (!target.empty())
+        message += ": " + target;
+
+    PyErr_SetString(PyExc_PermissionError, message.c_str());
     return -1;
+}
+
+// Records a grant in the plugin's sidecar so it is not asked again. Reads the install state
+// freshly because the async prompt outlives the caller's stack copy of it.
+void persist_grant(const std::string& plugin_key, AuditEventCategory category, const std::vector<std::string>& targets)
+{
+    PluginInstallState state;
+    if (!PluginManager::instance().get_install_state(plugin_key, state))
+        return;
+
+    std::vector<std::string>* permission_list = permission_list_for(category, state.permissions);
+    if (!permission_list)
+        return;
+
+    for (const auto& target : targets)
+        persist_permission(plugin_key, state, *permission_list, target);
 }
 
 int decide_audited_event(PluginAuditManager&             mgr,
@@ -772,7 +829,9 @@ int decide_audited_event(PluginAuditManager&             mgr,
             return 0;
     }
 
-    if (!PluginAuditManager::prompt_permission({plugin_key, plugin_name, event_name, category, unresolved}))
+    PluginPermissionRequest request{plugin_key, plugin_name, event_name, category, unresolved};
+    request.grant_later = [plugin_key, category, unresolved] { persist_grant(plugin_key, category, unresolved); };
+    if (!PluginAuditManager::prompt_permission(request))
         return report_denied(mgr, event_name, {false, "audit permission required"});
 
     if (permission_list)
@@ -832,7 +891,7 @@ int PluginAuditManager::audit_hook(const char* event, PyObject* args, void* user
     if (fs_category) {
         for (const auto& target : targets) {
             if (mgr->is_denied_path(boost::filesystem::path(target)))
-                return PluginAuditDetail::report_denied(*mgr, event_name, {false, "denied path"});
+                return PluginAuditDetail::report_denied(*mgr, event_name, {false, "denied path"}, target);
         }
     }
 

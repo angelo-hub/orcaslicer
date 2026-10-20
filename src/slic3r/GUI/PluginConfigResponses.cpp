@@ -56,7 +56,7 @@ nlohmann::json PluginConfig::get_config_response(const PluginCapabilityId& id)
             } catch (const std::exception& ex) {
                 error = ex.what();
             } catch (...) {
-                error = "Unknown error";
+                error = _u8L("Unknown error");
             }
         }
 
@@ -152,7 +152,7 @@ nlohmann::json PluginConfig::restore_config_response(const PluginCapabilityId& i
         } catch (const std::exception& ex) {
             error = ex.what();
         } catch (...) {
-            error = "Unknown error";
+            error = _u8L("Unknown error");
         }
     }
 

@@ -5,6 +5,11 @@
 #include "ProjectTask.hpp"
 
 
+#include <map>
+#include <string>
+#include <sstream>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 #include <thread>
 #include <mutex>
 #include <codecvt>

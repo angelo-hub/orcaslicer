@@ -11,9 +11,15 @@
 #define ORCA_BUNDLED_UV_EXECUTABLE ""
 #endif
 #include "PluginAuditManager.hpp"
+#include <atomic>
+#include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
+#include <cstdlib>
+#include <memory>
+#include <exception>
 #include <pytypedefs.h>
 #include "PluginFsUtils.hpp"
+#include <pybind11/pybind11.h>
 
 #include <pybind11/embed.h>
 
@@ -25,8 +31,14 @@
 #include <ctime>
 #include <iomanip>
 #include <mutex>
+#include <shared_mutex>
 #include <sstream>
+#include <utility>
+#include <string>
 #include <vector>
+#include <pybind11/cast.h>
+#include <pybind11/pytypes.h>
+#include <Python.h>
 
 namespace Slic3r {
 
@@ -365,15 +377,20 @@ boost::filesystem::path find_bundled_python_home()
     fs::path bundle_python = fs::path(resources_dir()).parent_path() / "MacOS" / "python";
     if (valid_python_home(bundle_python))
         return bundle_python;
-#elif defined(_WIN32)
-    fs::path exe_python = boost::dll::program_location().parent_path() / "python";
-    if (valid_python_home(exe_python))
-        return exe_python;
-#else
+#elif !defined(_WIN32)
     fs::path linux_python = fs::path(resources_dir()).parent_path() / "lib" / "python";
     if (valid_python_home(linux_python))
         return linux_python;
 #endif
+
+    // Next to the executable: the Windows install layout, and the runtime copied
+    // beside every platform's unit-test binary (tests/slic3rutils/CMakeLists.txt).
+    // The CI test runner only receives the build/tests tree, so the candidates
+    // below -- all of which point into the deps or install trees -- never resolve
+    // there.
+    fs::path exe_python = boost::dll::program_location().parent_path() / "python";
+    if (valid_python_home(exe_python))
+        return exe_python;
 
     fs::path configured_python = ORCA_BUNDLED_PYTHON_ROOT;
     if (!configured_python.empty() && valid_python_home(configured_python))
