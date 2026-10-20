@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.1](https://github.com/angelo-hub/orcaslicer/compare/mobile-v0.2.0...mobile-v0.2.1) (2026-10-19)
+
+
+### Fixes
+
+* **mobile:** adopt the UIScene life cycle so iOS 27 SDK builds launch ([010f672](https://github.com/angelo-hub/orcaslicer/commit/010f6727f1a042d0d482a6116349d83dcc8079d8))
+* **mobile:** adopt the UIScene life cycle so iOS 27 SDK builds launch ([19743c3](https://github.com/angelo-hub/orcaslicer/commit/19743c3cf67be15ec56875d36bc9bb8ec7531adc))
+* **mobile:** declare export compliance and explain local network access ([9a04a16](https://github.com/angelo-hub/orcaslicer/commit/9a04a162ed974bdafec4e1312b4befccdbf4dac4))
+* **mobile:** declare export compliance and explain local network access ([a00295f](https://github.com/angelo-hub/orcaslicer/commit/a00295fb3ac8060ebae42ebc09eac4be1434dcee))
+* **mobile:** keep the viewport drawing large toolpaths on a device ([3a968ba](https://github.com/angelo-hub/orcaslicer/commit/3a968ba00c28102505cc50bcc40145c0a95f1c72))
+* **mobile:** keep the viewport drawing large toolpaths on a device ([fbcca0c](https://github.com/angelo-hub/orcaslicer/commit/fbcca0cbfc4dcb2d08c241833ae48a450b9a1566))
+* **mobile:** start the altstore branch on the first publish ([c3de71b](https://github.com/angelo-hub/orcaslicer/commit/c3de71b23bb4b12085e840dab697ffe2d911198d))
+* **mobile:** start the altstore branch on the first publish ([1e73290](https://github.com/angelo-hub/orcaslicer/commit/1e732900059d478ad0a204fac42fec4d517ce620))
+
 ## [0.2.0](https://github.com/angelo-hub/orcaslicer/compare/mobile-v0.1.0...mobile-v0.2.0) (2026-10-18)
 
 
