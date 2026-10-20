@@ -103,6 +103,31 @@ TEST_CASE("Option definitions describe every preset option", "[Session]")
     CHECK(found_nozzle_diameter);
 }
 
+// Print::process names the pool's threads with a barrier over
+// this_task_arena::max_concurrency() of them, once per process. A cap below the core
+// count expressed as a global_control left that figure at the core count while fewer
+// threads existed, and the first capped slice of a process never returned. This runs
+// first in declaration order so that it is that first slice; under --order rand it may
+// run after the barrier has already passed and then only checks the result.
+TEST_CASE("The first slice of a process finishes with a thread limit below the core count", "[Session][slow]")
+{
+    const ScopedDataDir& dir = configured_directories();
+    (void) dir;
+    Session session;
+    REQUIRE(session.load_presets().empty());
+    REQUIRE(session.select_preset(PresetKind::Printer, first_name_containing(session.presets(PresetKind::Printer), "Voron 2.4 350 0.4 nozzle")));
+    REQUIRE(session.select_preset(PresetKind::Filament, first_compatible(session.presets(PresetKind::Filament))));
+    REQUIRE(session.select_preset(PresetKind::Process, first_compatible(session.presets(PresetKind::Process))));
+    REQUIRE(session.import(std::string(TEST_DATA_DIR) + "/20mm_cube.obj").size() == 1);
+
+    // One thread is below any core count; the barrier would have waited for the rest.
+    session.set_thread_limit(1);
+    const SliceResult result = session.slice(nullptr);
+    INFO(result.error);
+    CHECK(result.outcome == SliceOutcome::Finished);
+    CHECK(session.is_sliced());
+}
+
 TEST_CASE("Session loads presets, imports a model, slices and exports G-code", "[Session][slow]")
 {
     const ScopedDataDir& dir = configured_directories();

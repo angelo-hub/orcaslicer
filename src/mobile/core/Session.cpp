@@ -26,7 +26,7 @@
 #include "libslic3r/Utils.hpp"
 
 #include <admesh/stl.h>
-#include <tbb/global_control.h>
+#include <tbb/task_arena.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/nowide/cstdio.hpp>
@@ -1369,10 +1369,21 @@ SliceResult Session::slice(const ProgressFn& on_progress)
     // re-slice would otherwise peak at old plus new; a phone has no room for that.
     im.current().gcode_result = GCodeProcessorResult();
 
-    // Scoped for the slice only, so an export or arrange afterwards is unaffected.
-    std::optional<tbb::global_control> thread_cap;
+    // Scoped for the slice only, so an export or arrange afterwards is unaffected. An
+    // arena rather than a global_control: Print::process starts by naming the pool's
+    // threads with a barrier over this_task_arena::max_concurrency() of them, and a
+    // global_control lowers how many workers run without lowering that figure, so a cap
+    // below the core count waits there forever. An arena of thread_limit slots is both
+    // the cap and the figure the barrier reads.
+    std::optional<tbb::task_arena> arena;
     if (im.thread_limit > 0)
-        thread_cap.emplace(tbb::global_control::max_allowed_parallelism, im.thread_limit);
+        arena.emplace(int(im.thread_limit), 1);
+    auto in_arena = [&arena](auto&& fn) {
+        if (arena)
+            arena->execute(fn);
+        else
+            fn();
+    };
 
     std::vector<SliceWarning> warnings;
     im.current().print.restart();
@@ -1386,19 +1397,21 @@ SliceResult Session::slice(const ProgressFn& on_progress)
     });
 
     try {
-        im.current().print.apply(im.current().model, im.bundle.full_config());
-        std::vector<StringObjectException> validation_warnings;
-        const StringObjectException        err = im.current().print.validate(&validation_warnings);
-        for (const StringObjectException& w : validation_warnings)
-            warnings.push_back({ w.string, false });
-        if (! err.string.empty()) {
-            result.outcome = SliceOutcome::Failed;
-            result.error   = err.string;
-        } else {
-            im.current().print.process();
-            result.outcome = SliceOutcome::Finished;
-            im.current().sliced      = true;
-        }
+        in_arena([&] {
+            im.current().print.apply(im.current().model, im.bundle.full_config());
+            std::vector<StringObjectException> validation_warnings;
+            const StringObjectException        err = im.current().print.validate(&validation_warnings);
+            for (const StringObjectException& w : validation_warnings)
+                warnings.push_back({ w.string, false });
+            if (! err.string.empty()) {
+                result.outcome = SliceOutcome::Failed;
+                result.error   = err.string;
+            } else {
+                im.current().print.process();
+                result.outcome = SliceOutcome::Finished;
+                im.current().sliced      = true;
+            }
+        });
     } catch (const CanceledException&) {
         result.outcome = im.oom ? SliceOutcome::OutOfMemory : SliceOutcome::Cancelled;
     } catch (const std::bad_alloc&) {
