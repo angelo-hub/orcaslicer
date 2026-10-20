@@ -32,6 +32,23 @@ import { useViewportStore } from '@/lib/viewport'
 // clusters do not collide when both are populated, and the selection bar collapses
 // to a single row so it fits above the mode pill without covering it.
 
+/** Longer than the system's rotation animation. */
+const ROTATION_MS = 1000
+
+function unlock(): void {
+  void ScreenOrientation.unlockAsync().catch(() => {})
+}
+
+const RESTORE_LOCK: Partial<
+  Record<ScreenOrientation.Orientation, ScreenOrientation.OrientationLock>
+> = {
+  [ScreenOrientation.Orientation.PORTRAIT_UP]: ScreenOrientation.OrientationLock.PORTRAIT_UP,
+  [ScreenOrientation.Orientation.PORTRAIT_DOWN]: ScreenOrientation.OrientationLock.PORTRAIT_DOWN,
+  [ScreenOrientation.Orientation.LANDSCAPE_LEFT]: ScreenOrientation.OrientationLock.LANDSCAPE_LEFT,
+  [ScreenOrientation.Orientation.LANDSCAPE_RIGHT]:
+    ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT,
+}
+
 export default function FullscreenScreen(): React.JSX.Element {
   const router = useRouter()
   const session = useSession()
@@ -86,9 +103,26 @@ export default function FullscreenScreen(): React.JSX.Element {
   }, [session])
 
   useEffect(() => {
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {})
+    let opened = ScreenOrientation.Orientation.UNKNOWN
+    void ScreenOrientation.getOrientationAsync()
+      .then((orientation) => {
+        opened = orientation
+        return ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE)
+      })
+      .catch(() => {})
     return () => {
-      void ScreenOrientation.unlockAsync().catch(() => {})
+      // iOS keeps the landscape interface after an unlock until the device turns, so
+      // lock back to the orientation the screen opened in first. The unlock waits out
+      // the rotation: sent straight after the lock it cancels it, and the rotation
+      // fires no orientation change event to wait on.
+      const restore = RESTORE_LOCK[opened]
+      if (restore === undefined) {
+        unlock()
+        return
+      }
+      void ScreenOrientation.lockAsync(restore)
+        .then(() => setTimeout(unlock, ROTATION_MS))
+        .catch(unlock)
     }
   }, [])
 

@@ -201,7 +201,10 @@ function OptionRow({
           {def.unit !== '' ? (
             <Text className="text-footnote text-neutral-500">{t(def.unit)}</Text>
           ) : null}
-          {isPercent ? <Text className="text-footnote text-neutral-500">%</Text> : null}
+          {/* Some percent options already carry "%" as their unit. */}
+          {isPercent && def.unit !== '%' ? (
+            <Text className="text-footnote text-neutral-500">%</Text>
+          ) : null}
         </View>
       )
       break
