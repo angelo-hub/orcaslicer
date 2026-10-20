@@ -1,0 +1,207 @@
+name: Build Android core
+
+# Cross-compiles the slicing core (libslic3r + the mobile façade) for Android with the
+# NDK and publishes libOrcaCore.a with the façade's headers, laid out as
+# mobile/packages/orca-core/android/libs/OrcaCore expects (<abi>/libOrcaCore.a and
+# include/OrcaCore). One ABI for now, arm64-v8a, so there is no merge job.
+#
+# The dependency build is resumable across runs the same way as "Build iOS core": the
+# prefix, the ExternalProject stamps and the download cache are saved after every run,
+# even a failed one, and restored on the next. Every dependency that still has a step to
+# run is then rebuilt from scratch by the build script's -r, while the untouched ones are
+# reused. A restored cache also records the commit it was built from, so a recipe whose
+# patch files changed is rebuilt as well. Compiles go through ccache, persisted the same
+# way; autotools and OpenSSL recipes compile without it.
+
+# One run per branch: a new push cancels the one still running for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'deps/**'
+      - 'deps_src/**'
+      - 'src/**'
+      - 'version.inc'
+      - 'scripts/build_android_core.sh'
+      - '.github/workflows/build_android_core.yml'
+  workflow_dispatch:
+    inputs:
+      rebuild-deps:
+        description: Ignore the cached dependency prefix and rebuild it
+        type: boolean
+        default: false
+
+jobs:
+  core:
+    name: Android core (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a]
+    env:
+      # The NDK the archive is built with; mobile/packages/orca-core/android/gradle.properties
+      # names the same one.
+      NDK_VERSION: 27.1.12297006
+      DEPS_DIR: deps/build/android-${{ matrix.abi }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      # Paths under the checkout are hashed relative to it, so a runner that checks out
+      # elsewhere still hits; the compiler is identified by content, not mtime.
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
+      CCACHE_MAXSIZE: 1500M
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build autoconf automake libtool texinfo ccache
+
+      - name: Install the NDK
+        run: |
+          set -e
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" >/dev/null
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Show toolchain
+        run: |
+          grep Pkg.Revision "$ANDROID_NDK_ROOT/source.properties"
+          cmake --version | head -1
+          ninja --version
+
+      - name: Restore dependency build
+        id: deps-cache
+        if: ${{ !inputs.rebuild-deps }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ${{ env.DEPS_DIR }}/OrcaSlicer_dep
+            ${{ env.DEPS_DIR }}/*-prefix/src/*-stamp
+            ${{ env.DEPS_DIR }}/*-prefix/tmp
+            ${{ env.DEPS_DIR }}/deps-cache-commit
+            deps/DL_CACHE
+          key: android-deps-${{ matrix.abi }}-${{ github.run_id }}
+          restore-keys: |
+            android-deps-${{ matrix.abi }}-
+
+      - name: Restore compiler cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ccache
+          key: android-ccache-${{ matrix.abi }}-${{ github.run_id }}
+          restore-keys: |
+            android-ccache-${{ matrix.abi }}-
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
+      - name: Invalidate recipes whose patches changed
+        if: ${{ steps.deps-cache.outputs.cache-matched-key != '' }}
+        run: |
+          set -e
+          commit_file="$DEPS_DIR/deps-cache-commit"
+          if [ ! -f "$commit_file" ]; then
+            echo "No commit recorded with the cache; rebuilding every dependency"
+            rm -rf "$DEPS_DIR"/*-prefix
+            exit 0
+          fi
+          base=$(cat "$commit_file")
+          echo "Cache was built at $base"
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Commit unknown to this checkout; rebuilding every dependency"
+            rm -rf "$DEPS_DIR"/*-prefix
+            exit 0
+          fi
+          # A changed configure command, download or dependency is noticed by the
+          # ExternalProject stamps themselves (the build script's -r handles those).
+          # Patch files are not, so a recipe directory with any change is rebuilt.
+          changed=$(git diff --name-only "$base" HEAD -- deps/)
+          echo "Changed since then:"; echo "$changed"
+          for recipe in $(echo "$changed" | sed -nE 's#^deps/([^/]+)/.*#\1#p' | sort -u); do
+            echo "Recipe $recipe changed; it is rebuilt"
+            rm -rf "$DEPS_DIR/dep_$recipe-prefix"
+          done
+
+      # codeload cuts the Draco archive short when CMake fetches it from these runners.
+      # curl over HTTP/2 with retries gets it whole; with the file already in the download
+      # cache and matching its hash, ExternalProject skips its own download.
+      - name: Prefetch the Draco sources
+        run: |
+          set -euo pipefail
+          recipe=deps/Draco/Draco.cmake
+          url=$(sed -nE 's/^ *URL +(https:[^ ]+).*/\1/p' "$recipe")
+          sha=$(sed -nE 's/^ *URL_HASH +SHA256=([0-9a-fA-F]+).*/\1/p' "$recipe")
+          dest="deps/DL_CACHE/Draco/$(basename "$url")"
+          if [ -f "$dest" ] && echo "$sha  $dest" | sha256sum -c --status; then
+            echo "$dest already cached"
+            exit 0
+          fi
+          mkdir -p "$(dirname "$dest")"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL --http2 --retry 3 --retry-all-errors -o "$dest" "$url" &&
+              echo "$sha  $dest" | sha256sum -c; then
+              exit 0
+            fi
+            echo "Attempt $attempt failed; got $(wc -c < "$dest" 2>/dev/null || echo 0) bytes"
+            sleep $((attempt * 15))
+          done
+          rm -f "$dest"
+          echo "::error::Could not download $url intact" >&2
+          exit 1
+
+      - name: Build dependencies
+        run: ./scripts/build_android_core.sh -d -r -a ${{ matrix.abi }}
+
+      - name: Record the commit the dependency build matches
+        if: always()
+        run: |
+          mkdir -p "$DEPS_DIR"
+          git rev-parse HEAD > "$DEPS_DIR/deps-cache-commit"
+
+      - name: Save dependency build
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ env.DEPS_DIR }}/OrcaSlicer_dep
+            ${{ env.DEPS_DIR }}/*-prefix/src/*-stamp
+            ${{ env.DEPS_DIR }}/*-prefix/tmp
+            ${{ env.DEPS_DIR }}/deps-cache-commit
+            deps/DL_CACHE
+          key: android-deps-${{ matrix.abi }}-${{ github.run_id }}
+
+      - name: Build core
+        run: ./scripts/build_android_core.sh -s -a ${{ matrix.abi }} -x
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache --show-stats
+
+      - name: Save compiler cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: android-ccache-${{ matrix.abi }}-${{ github.run_id }}
+
+      - name: Upload core
+        uses: actions/upload-artifact@v6
+        with:
+          name: orca-core-android-${{ matrix.abi }}
+          path: build/android-core
+          if-no-files-found: error
