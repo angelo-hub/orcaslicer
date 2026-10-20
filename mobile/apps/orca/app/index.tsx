@@ -38,6 +38,7 @@ import { OnboardingSheet } from '@/ui/OnboardingSheet'
 import { PresetPicker } from '@/ui/PresetPicker'
 import { PresetRow } from '@/ui/PresetRow'
 import { ProgressBar } from '@/ui/ProgressBar'
+import { PromptSheet } from '@/ui/PromptSheet'
 import { useCore } from '@/lib/core'
 import { haptic } from '@/lib/haptics'
 import { t } from '@/lib/i18n'
@@ -68,7 +69,7 @@ import { hasOnboarded } from '@/lib/onboarding'
 import { relativeTime } from '@/lib/time'
 import { showToast } from '@/lib/toast'
 import { registerSyncContext, syncIfStale } from '@/lib/cloud/sync'
-import { classifyOpenedUrl } from '@/lib/openFile'
+import { discardCopy, PICKER_COPY, pickedPath, resolveOpenedUrl } from '@/lib/openFile'
 import { importPresetFile } from '@/lib/presetFiles'
 import { nativePath, removePresetFile, removeVendor } from '@/lib/profiles'
 import { queryClient, queryKeys } from '@/lib/queries'
@@ -445,57 +446,61 @@ export default function HomeScreen(): React.JSX.Element {
     // points at a sandboxed copy we can read directly. `copyToCacheDirectory` would
     // copy it a second time into Caches/DocumentPicker, which nothing ever prunes —
     // that leaked a full duplicate per import (100 MB a go on a detailed mesh).
+    // Android hands out content:// URIs the core cannot open, so there the picker
+    // makes the cache copy and it is removed after the import (lib/openFile.ts).
     const picked = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: false,
+      copyToCacheDirectory: PICKER_COPY,
       multiple: false,
     })
     const asset = picked.assets?.[0]
     if (picked.canceled || asset === undefined) return
-    await importPath(decodeURIComponent(asset.uri.replace(/^file:\/\//, '')))
+    const path = pickedPath(asset)
+    await importPath(path)
+    discardCopy(path)
   }, [session, importPath])
 
-  const importFromUrl = useCallback(async () => {
+  // The URL prompt is a sheet of our own: Alert.prompt exists on iOS only.
+  const [urlPromptOpen, setUrlPromptOpen] = useState(false)
+  const importFromUrl = useCallback(() => {
     if (session === null) return
-    // Ask for the URL via a native prompt (Alert.prompt only exists on iOS, but
-    // that is our only platform for now — the Android port lands in Phase 13).
-    Alert.prompt?.(
-      'Import from URL',
-      'Paste a .3mf, .stl, .obj, .step or .amf link.',
-      async (url) => {
-        const trimmed = (url ?? '').trim()
-        if (trimmed === '' || !/^https?:\/\//i.test(trimmed)) {
-          showToast('Please paste a full http(s) URL.', 'info')
-          return
-        }
-        setBusy(true)
-        try {
-          const response = await fetch(trimmed)
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          // Prefer the server's Content-Disposition filename when present; falls
-          // back to the URL's last segment. We only accept known-good extensions
-          // so a stray HTML redirect page does not get treated as a model.
-          const cd = response.headers.get('Content-Disposition') ?? ''
-          const cdMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd)
-          const nameFromUrl = decodeURIComponent(new URL(trimmed).pathname.split('/').pop() ?? '')
-          let name = cdMatch?.[1] ?? nameFromUrl ?? `model-${Date.now()}.3mf`
-          if (!/\.(3mf|stl|obj|step|stp|amf)$/i.test(name)) name = `${name}.3mf`
-          const bytes = new Uint8Array(await response.arrayBuffer())
-          const dir = new Directory(Paths.cache, 'downloads')
-          if (!dir.exists) dir.create({ intermediates: true })
-          const target = new File(dir, name)
-          if (target.exists) target.delete()
-          target.write(bytes)
-          await importPath(nativePath(dir) + '/' + name)
-        } catch (error) {
-          showToast(`Import failed: ${String(error)}`, 'error')
-        } finally {
-          setBusy(false)
-        }
-      },
-      'plain-text',
-      'https://',
-    )
-  }, [session, importPath])
+    setUrlPromptOpen(true)
+  }, [session])
+
+  const importFromUrlValue = useCallback(
+    async (url: string) => {
+      if (session === null) return
+      const trimmed = url.trim()
+      if (trimmed === '' || !/^https?:\/\//i.test(trimmed)) {
+        showToast('Please paste a full http(s) URL.', 'info')
+        return
+      }
+      setBusy(true)
+      try {
+        const response = await fetch(trimmed)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        // Prefer the server's Content-Disposition filename when present; falls
+        // back to the URL's last segment. We only accept known-good extensions
+        // so a stray HTML redirect page does not get treated as a model.
+        const cd = response.headers.get('Content-Disposition') ?? ''
+        const cdMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd)
+        const nameFromUrl = decodeURIComponent(new URL(trimmed).pathname.split('/').pop() ?? '')
+        let name = cdMatch?.[1] ?? nameFromUrl ?? `model-${Date.now()}.3mf`
+        if (!/\.(3mf|stl|obj|step|stp|amf)$/i.test(name)) name = `${name}.3mf`
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        const dir = new Directory(Paths.cache, 'downloads')
+        if (!dir.exists) dir.create({ intermediates: true })
+        const target = new File(dir, name)
+        if (target.exists) target.delete()
+        target.write(bytes)
+        await importPath(nativePath(dir) + '/' + name)
+      } catch (error) {
+        showToast(`Import failed: ${String(error)}`, 'error')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [session, importPath],
+  )
 
   const saveProject = useCallback(
     async (share: boolean) => {
@@ -552,16 +557,21 @@ export default function HomeScreen(): React.JSX.Element {
 
   // Handle files opened from Files.app, a share sheet, or a deep link. On cold
   // launch `getInitialURL` returns the URL that opened the app; while running,
-  // `Linking.addEventListener` fires for each subsequent open. We accept file://
-  // URLs whose extension libslic3r can read; iOS delivers them into the app's
-  // sandbox under `Documents/Inbox/…` after Info.plist declares the UTI.
+  // `Linking.addEventListener` fires for each subsequent open. iOS delivers file://
+  // URLs into the app's sandbox under `Documents/Inbox/…` after Info.plist declares
+  // the UTI; Android delivers content:// URIs, which lib/openFile.ts copies into the
+  // cache under the right extension, a copy removed once imported.
   useEffect(() => {
     if (session === null) return
     const openFromUrl = (raw: string): void => {
-      const opened = classifyOpenedUrl(raw)
-      if (opened === null) return
-      if (opened.kind === 'model') void importPath(opened.path)
-      else void importPresetFile(opened.path, { session, reloadPresets, onChanged: refresh })
+      void resolveOpenedUrl(raw)
+        .then(async (opened) => {
+          if (opened === null) return
+          if (opened.kind === 'model') await importPath(opened.path)
+          else await importPresetFile(opened.path, { session, reloadPresets, onChanged: refresh })
+          if (opened.temporary) discardCopy(opened.path)
+        })
+        .catch((error: unknown) => showToast(`Could not open the file: ${String(error)}`, 'error'))
     }
     void Linking.getInitialURL().then((url) => {
       if (url !== null && url.length > 0) openFromUrl(url)
@@ -1729,6 +1739,18 @@ export default function HomeScreen(): React.JSX.Element {
         onChanged={() => {
           setRevision((r) => r + 1)
           setObjects(session.objects())
+        }}
+      />
+      <PromptSheet
+        visible={urlPromptOpen}
+        title="Import from URL"
+        message="Paste a .3mf, .stl, .obj, .step or .amf link."
+        placeholder="https://"
+        confirmLabel="Import"
+        onCancel={() => setUrlPromptOpen(false)}
+        onConfirm={(url) => {
+          setUrlPromptOpen(false)
+          void importFromUrlValue(url)
         }}
       />
       <OnboardingSheet visible={showOnboarding} onDismiss={() => setShowOnboarding(false)} />
