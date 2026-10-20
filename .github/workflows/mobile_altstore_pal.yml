@@ -1,17 +1,23 @@
 name: Mobile AltStore PAL
 
-# Adds a notarized build to the AltStore PAL source (source-pal.json on the altstore
-# branch). PAL installs only apps Apple notarized for alternative distribution, which
-# the ad-hoc .ipa of "Mobile release" is not. For a version already released there:
+# Publishes a notarized build to the AltStore PAL source (source-pal.json on the altstore
+# branch). PAL installs only apps Apple notarized for alternative distribution, which the
+# ad-hoc .ipa of "Mobile release" is not; "Mobile App Store Connect" uploads the
+# team-signed build that gets notarized.
 #
-#   1. Archive and upload a team-signed build of the same version to App Store Connect,
-#      and have it notarized for alternative distribution.
-#   2. Download its ADP (App Store Connect API: alternativeDistributionPackageVersions)
-#      and host the unzipped package, e.g. as files of the GitHub release.
-#   3. Run this workflow with the release tag and the URL of the ADP's manifest.json.
+# Once App Store Connect shows the version as Ready for Distribution, copy its
+# Alternative Distribution Package ID (Distribution > History) and run this with the
+# release tag the build belongs to. Nothing here waits on Apple or AltStore: a run whose
+# ADP AltStore has not processed yet stops at once and says so; run it again later. It
+#   1. downloads the processed ADP from AltStore PAL (mobile/scripts/fetch-altstore-adp.sh),
+#      reading version and build from the build itself;
+#   2. attaches the package's files to the release as pal-<build>-<file> assets, since
+#      release assets have no folders, and maps them for AltStore with `assetURLs`;
+#   3. adds the version to source-pal.json, with the release's notes and permissions.
 #
-# Needs the ALTSTORE_MARKETPLACE_ID repository variable: the Apple ID under "App
-# Information" in App Store Connect. Notes and permissions come from the release.
+# AltStore must be authorized as a marketplace for the app in App Store Connect, with
+# notifications on, so it processes notarized builds itself. Needs the
+# ALTSTORE_MARKETPLACE_ID repository variable: the Apple ID under "App Information".
 
 on:
   workflow_dispatch:
@@ -20,18 +26,10 @@ on:
         description: Release tag (mobile-vX.Y.Z) the notarized build belongs to
         type: string
         required: true
-      manifest_url:
-        description: URL of the hosted ADP's manifest.json
+      adp_id:
+        description: Alternative Distribution Package ID from App Store Connect
         type: string
         required: true
-      size:
-        description: Size in bytes of one of the ADP's variants
-        type: string
-        required: true
-      build:
-        description: CFBundleVersion of the notarized build (default the release's)
-        type: string
-        default: ''
 
 concurrency:
   group: mobile-release
@@ -44,6 +42,7 @@ jobs:
   pal:
     name: PAL source
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -56,13 +55,43 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: gh release download "$TAG" -p app-meta.json -p altstore-notes.txt -D release
 
+      - name: Fetch ADP
+        env:
+          ADP_ID: ${{ inputs.adp_id }}
+        run: bash mobile/scripts/fetch-altstore-adp.sh "$ADP_ID" adp
+
+      - name: Attach ADP to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          root=$(jq -r .root adp/adp.json)
+          build=$(jq -r .build adp/adp.json)
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          mkdir -p assets
+          echo '{}' > adp/asset-urls.json
+          while read -r file; do
+            name=$(basename "$file")
+            key=${name%.*}
+            if jq -e --arg k "$key" 'has($k)' adp/asset-urls.json >/dev/null; then
+              echo "::error::Two ADP files are both named $key; assetURLs cannot tell them apart" >&2
+              exit 1
+            fi
+            asset="pal-$build-$name"
+            cp "$root/$file" "assets/$asset"
+            jq --arg k "$key" --arg u "$base/$asset" '. + {($k): $u}' adp/asset-urls.json > adp/tmp.json
+            mv adp/tmp.json adp/asset-urls.json
+          done < <(jq -r '.files[]' adp/adp.json)
+          # Uploaded byte for byte: AltStore checks every file against the manifest's
+          # hashes. Re-running for the same build replaces its assets.
+          gh release upload "$TAG" assets/* --clobber
+          cat adp/asset-urls.json
+
       - name: AltStore PAL source
         env:
           GH_TOKEN: ${{ github.token }}
           MARKETPLACE_ID: ${{ vars.ALTSTORE_MARKETPLACE_ID }}
-          MANIFEST_URL: ${{ inputs.manifest_url }}
-          SIZE: ${{ inputs.size }}
-          BUILD: ${{ inputs.build }}
         run: |
           set -euo pipefail
           if [ -z "$MARKETPLACE_ID" ]; then
@@ -70,12 +99,14 @@ jobs:
             exit 1
           fi
           meta=release/app-meta.json
+          adp=adp/adp.json
           bash mobile/scripts/publish-altstore.sh source-pal.json \
             --meta "$meta" \
             --marketplace-id "$MARKETPLACE_ID" \
-            --version "$(jq -r .version "$meta")" \
+            --version "$(jq -r .version "$adp")" \
             --marketing "$(jq -r .marketingVersion "$meta")" \
-            --build "${BUILD:-$(jq -r .buildVersion "$meta")}" \
-            --size "$SIZE" \
-            --download-url "$MANIFEST_URL" \
+            --build "$(jq -r .build "$adp")" \
+            --size "$(jq -r .size "$adp")" \
+            --download-url "$(jq -r .manifest adp/asset-urls.json)" \
+            --asset-urls adp/asset-urls.json \
             --notes-file release/altstore-notes.txt
