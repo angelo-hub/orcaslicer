@@ -21,6 +21,14 @@
 #include <os/proc.h>
 #define ORCA_MEMORY_WATCHDOG 1
 #endif
+#elif defined(__ANDROID__)
+// Android has no per-process limit: lmkd kills by priority once the whole system runs
+// short, the foreground app last. MemAvailable in /proc/meminfo, the kernel's estimate
+// of what can still be allocated without swapping, is the figure that pressure tracks.
+// onTrimMemory(RUNNING_CRITICAL) is not used: Android 14 deprecated it and rarely
+// delivers it, and it would need a JNI hop for what the poll already sees.
+#include <cstdio>
+#define ORCA_MEMORY_WATCHDOG 1
 #endif
 
 namespace margelo::nitro::orca {
@@ -146,14 +154,34 @@ unsigned sliceThreadLimit() {
   return std::clamp(byMemory, 2u, cores);
 }
 
+#if ORCA_MEMORY_WATCHDOG
+// The memory left before the system kills the app, or 0 when the figure is unavailable
+// (simulator, macOS, an unreadable /proc).
+size_t availableMemory() {
+#if defined(__APPLE__)
+  return os_proc_available_memory();
+#else
+  std::FILE* f = std::fopen("/proc/meminfo", "r");
+  if (f == nullptr) return 0;
+  char line[128];
+  unsigned long long kib = 0;
+  while (std::fgets(line, sizeof(line), f) != nullptr) {
+    if (std::sscanf(line, "MemAvailable: %llu kB", &kib) == 1) break;
+  }
+  std::fclose(f);
+  return static_cast<size_t>(kib * 1024u);
+#endif
+}
+#endif
+
 // Watches the process's memory headroom for the lifetime of one slice and turns an
-// imminent kill into a cancellation. iOS does not fail malloc; it terminates the
-// process when it crosses its limit, so nothing inside libslic3r can catch that. Two
-// signals, either of which cancels the slice with the out-of-memory outcome:
-//   - a poller reading os_proc_available_memory() every 150 ms, tripping below a
-//     headroom chosen so one burst of layer allocations between two polls still fits;
-//   - the kernel's critical memory-pressure notification, which arrives shortly before
-//     the kill and can land between two polls.
+// imminent kill into a cancellation. Neither iOS nor Android fails malloc; they
+// terminate the process (jetsam, lmkd), so nothing inside libslic3r can catch that.
+// Two signals, either of which cancels the slice with the out-of-memory outcome:
+//   - a poller reading availableMemory() every 150 ms, tripping below a headroom
+//     chosen so one burst of layer allocations between two polls still fits;
+//   - on iOS, the kernel's critical memory-pressure notification, which arrives
+//     shortly before the kill and can land between two polls.
 // Both call into the Session only through cancel_out_of_memory(), which is safe from
 // any thread. The pressure source's context is the Session, which outlives this
 // object, so a late event after the slice does no harm: the next slice() resets the
@@ -162,6 +190,7 @@ class MemoryWatchdog {
  public:
   explicit MemoryWatchdog(Session& session) : _session(session) {
 #if ORCA_MEMORY_WATCHDOG
+#if defined(__APPLE__)
     _source = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0, DISPATCH_MEMORYPRESSURE_CRITICAL,
                                      dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
     if (_source != nullptr) {
@@ -171,11 +200,12 @@ class MemoryWatchdog {
       });
       dispatch_resume(_source);
     }
+#endif
     _poller = std::thread([this] {
       std::unique_lock<std::mutex> lock(_mutex);
       while (!_cv.wait_for(lock, std::chrono::milliseconds(150), [this] { return _stop; })) {
-        // 0 means the figure is unavailable (simulator, macOS); never trip on it.
-        const size_t available = os_proc_available_memory();
+        // 0 means the figure is unavailable; never trip on it.
+        const size_t available = availableMemory();
         if (available > 0 && available < kCriticalHeadroom) {
           _session.cancel_out_of_memory();
           return;
@@ -193,10 +223,12 @@ class MemoryWatchdog {
     }
     _cv.notify_all();
     if (_poller.joinable()) _poller.join();
+#if defined(__APPLE__)
     if (_source != nullptr) {
       dispatch_source_cancel(_source);
       dispatch_release(_source);
     }
+#endif
 #endif
   }
 
@@ -208,7 +240,9 @@ class MemoryWatchdog {
 
   Session& _session;
 #if ORCA_MEMORY_WATCHDOG
+#if defined(__APPLE__)
   dispatch_source_t _source = nullptr;
+#endif
   std::thread _poller;
   std::mutex _mutex;
   std::condition_variable _cv;
