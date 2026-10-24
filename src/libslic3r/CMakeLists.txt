@@ -678,8 +678,13 @@ target_include_directories(libslic3r SYSTEM PUBLIC ${EXPAT_INCLUDE_DIRS})
 # through an INTERFACE property, so add it here explicitly.
 target_include_directories(libslic3r SYSTEM PUBLIC ${OpenCV_INCLUDE_DIRS})
 
-# Find the OCCT and related libraries
-set(OpenCASCADE_DIR "${CMAKE_PREFIX_PATH}/lib/cmake/occt")
+# Find the OCCT and related libraries. The deps prefix is the first entry of
+# CMAKE_PREFIX_PATH, which can hold more: the NDK's toolchain file appends its own.
+set(_deps_prefix "${CMAKE_PREFIX_PATH}")
+if (CMAKE_PREFIX_PATH)
+    list(GET CMAKE_PREFIX_PATH 0 _deps_prefix)
+endif ()
+set(OpenCASCADE_DIR "${_deps_prefix}/lib/cmake/occt")
 find_package(OpenCASCADE REQUIRED)
 target_include_directories(libslic3r SYSTEM PUBLIC ${OpenCASCADE_INCLUDE_DIR})
 
