@@ -1,0 +1,205 @@
+name: Build Android app
+
+# Builds the Android app as a release APK: Expo prebuild, then Gradle, against the newest
+# slicing core "Build Android core" published (the core is not rebuilt here; it takes
+# about an hour). Runs on every push that touches the app or the Nitro package, as the
+# Android counterpart of the IPA job, and "Mobile release" calls it for a release.
+#
+# Signing: Expo's prebuilt project signs the release build with the debug key from its
+# template, which is public. When the ANDROID_KEYSTORE secret is set, the APK is
+# re-signed with that release key instead, like the IPA job's ad-hoc signing step, and
+# the `signed` output says so; only such an APK is ever published, since anyone could
+# sign an update with the debug key.
+#
+#   ANDROID_KEYSTORE           secret: the keystore (.jks or .keystore), base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD  secret: its password
+#   ANDROID_KEY_ALIAS          secret: the key's alias in it
+#   ANDROID_KEY_PASSWORD       secret: the key's password, when it differs from the store's
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'mobile/apps/orca/**'
+      - 'mobile/packages/orca-core/**'
+      - 'mobile/package.json'
+      - 'mobile/pnpm-lock.yaml'
+      - '.github/workflows/build_android_app.yml'
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build
+        type: string
+        required: true
+      version:
+        description: The release's version, label included (APP_MARKETING_VERSION)
+        type: string
+        required: true
+      base:
+        description: The numeric version (versionName, APP_VERSION)
+        type: string
+        required: true
+      build-number:
+        description: versionCode (APP_BUILD_NUMBER)
+        type: string
+        required: true
+      variant:
+        description: app.config.ts variant, production or beta
+        type: string
+        required: true
+    outputs:
+      artifact:
+        description: Name of the uploaded artifact holding the APK
+        value: ${{ jobs.apk.outputs.artifact }}
+      signed:
+        description: true when the APK carries the release key
+        value: ${{ jobs.apk.outputs.signed }}
+
+# One run per branch on pushes. A call from "Mobile release" names its commit, and is
+# never cancelled: its caller's event can be a push to main as well.
+concurrency:
+  group: build-android-app-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ !inputs.ref }}
+
+permissions:
+  contents: read
+  # gh run download reads the "Build Android core" run's artifact.
+  actions: read
+
+jobs:
+  apk:
+    name: APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact: ${{ steps.package.outputs.artifact }}
+      signed: ${{ steps.sign.outputs.signed }}
+    env:
+      # The NDK the core and the Nitro package are built with
+      # (mobile/packages/orca-core/android/gradle.properties).
+      NDK_VERSION: 27.1.12297006
+      # Read by app.config.ts at prebuild, with the versions below.
+      APP_VARIANT: ${{ inputs.variant || 'beta' }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: 'false'
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: ./.github/actions/mobile-setup
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install the NDK
+        run: |
+          set -e
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" >/dev/null
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Fetch the slicing core
+        id: core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          read -r run_id core_sha < <(gh run list --workflow build_android_core.yml --status success --limit 1 \
+            --json databaseId,headSha -q '.[0] | "\(.databaseId) \(.headSha)"') || true
+          if [ -z "${run_id:-}" ]; then
+            echo "::error::No successful 'Build Android core' run to take libOrcaCore.a from." >&2
+            exit 1
+          fi
+          echo "Taking the Android core from run $run_id ($core_sha)"
+          dest=packages/orca-core/android/libs/OrcaCore
+          rm -rf "$dest"
+          gh run download "$run_id" -n orca-core-android-arm64-v8a -D "$dest"
+          test -f "$dest/arm64-v8a/libOrcaCore.a"
+          test -f "$dest/include/OrcaCore/Session.hpp"
+          du -sh "$dest"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "sha=$core_sha" >> "$GITHUB_OUTPUT"
+
+      # app.config.ts falls back to its own version only when these are unset, not
+      # empty, so a push (no inputs) leaves them out.
+      - name: App version
+        if: ${{ inputs.version != '' }}
+        env:
+          VERSION: ${{ inputs.version }}
+          BASE: ${{ inputs.base }}
+          BUILD_NUMBER: ${{ inputs.build-number }}
+        run: |
+          {
+            echo "APP_VERSION=$BASE"
+            echo "APP_BUILD_NUMBER=$BUILD_NUMBER"
+            echo "APP_MARKETING_VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Translation catalogs
+        run: pnpm i18n
+
+      - name: Prebuild
+        working-directory: mobile/apps/orca
+        run: npx expo prebuild -p android --clean
+
+      - name: Build
+        working-directory: mobile/apps/orca/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+      - name: Sign
+        id: sign
+        working-directory: mobile/apps/orca
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          apk=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          test -n "$apk"
+          build_tools=$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          if [ -z "$KEYSTORE" ]; then
+            echo "::notice::ANDROID_KEYSTORE is not set; the APK keeps the debug signature and is not published."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          else
+            # Gradle has already aligned the APK; apksigner replaces every signature scheme.
+            keystore=$RUNNER_TEMP/release.keystore
+            base64 -d <<<"$KEYSTORE" > "$keystore"
+            key_pass=KEY_PASSWORD
+            [ -n "$KEY_PASSWORD" ] || key_pass=KEYSTORE_PASSWORD
+            "$build_tools/apksigner" sign \
+              --ks "$keystore" --ks-pass env:KEYSTORE_PASSWORD \
+              --ks-key-alias "$KEY_ALIAS" --key-pass "env:$key_pass" \
+              "$apk"
+            rm -f "$keystore"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          fi
+          "$build_tools/apksigner" verify --print-certs "$apk" | head -3
+          echo "apk=$apk" >> "$GITHUB_ENV"
+
+      - name: Package
+        id: package
+        working-directory: mobile/apps/orca
+        run: |
+          set -euo pipefail
+          version=${APP_MARKETING_VERSION:-dev-$GITHUB_RUN_NUMBER}
+          mkdir -p build/android
+          cp "$apk" "build/android/OrcaMobile-$version.apk"
+          (cd build/android && sha256sum OrcaMobile-*.apk > SHA256SUMS-android)
+          ls -l build/android
+          echo "artifact=OrcaMobile-android-$version" >> "$GITHUB_OUTPUT"
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.package.outputs.artifact }}
+          path: mobile/apps/orca/build/android
+          if-no-files-found: error
+          retention-days: ${{ inputs.version && 30 || 7 }}

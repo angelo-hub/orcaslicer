@@ -19,8 +19,10 @@ name: Mobile release
 #   ipa             builds the .ipa on macOS (a self-hosted Mac when MOBILE_MACOS_RUNNER
 #                   is set) as the app.config.ts variant: production for a release, beta
 #                   (own bundle id, installs next to the stable app) otherwise.
+#   apk             builds the Android APK (build_android_app.yml) next to the .ipa.
 #   publish         attaches the .ipa to the release and adds it to the AltStore source
-#                   on the altstore branch (source-beta.json for betas).
+#                   on the altstore branch (source-beta.json for betas), plus the APK
+#                   when it built and carries the release key (ANDROID_KEYSTORE).
 #   app-store-connect  for a stable release, once the ASC_KEY_ID variable is set: a
 #                   team-signed build of the same version uploaded to App Store Connect
 #                   (mobile_app_store_connect.yml), for notarization and AltStore PAL.
@@ -406,10 +408,29 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  apk:
+    name: APK
+    needs: version
+    if: ${{ !failure() && !cancelled() && needs.version.outputs.build == 'true' }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/build_android_app.yml
+    with:
+      ref: ${{ needs.version.outputs.sha }}
+      version: ${{ needs.version.outputs.version }}
+      base: ${{ needs.version.outputs.base }}
+      build-number: ${{ needs.version.outputs.build-number }}
+      variant: ${{ needs.version.outputs.variant }}
+    secrets: inherit
+
   publish:
     name: Publish
-    needs: [version, ipa]
-    if: ${{ !failure() && !cancelled() && needs.version.outputs.publish == 'true' }}
+    needs: [version, ipa, apk]
+    # The APK rides along when it built and carries the release key; an Android failure
+    # never holds back the iOS release, which failure() would, since it looks at every
+    # job upstream.
+    if: ${{ !cancelled() && needs.ipa.result == 'success' && needs.version.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     concurrency:
       group: mobile-release
@@ -439,6 +460,13 @@ jobs:
           name: OrcaMobile-${{ needs.version.outputs.version }}
           path: release
 
+      - name: Download the Android build
+        if: ${{ needs.apk.result == 'success' && needs.apk.outputs.signed == 'true' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.apk.outputs.artifact }}
+          path: release
+
       - name: Release notes
         run: |
           set -euo pipefail
@@ -460,6 +488,10 @@ jobs:
             echo
             echo "- **AltStore / SideStore**: add the source \`https://raw.githubusercontent.com/$GITHUB_REPOSITORY/altstore/$source\`, or open the \`.ipa\` below with AltStore."
             echo "- Requires iOS $(jq -r .minOSVersion "$meta") or later."
+            apk=$(find release -maxdepth 1 -name '*.apk' | head -1)
+            if [ -n "$apk" ]; then
+              echo "- **Android**: download \`$(basename "$apk")\` below and open it. Android 10 or later, 64-bit ARM."
+            fi
             echo
             echo "Build $(jq -r .buildVersion "$meta"). Slicing core from [${core_sha:0:10}]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$core_sha) ([build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$(jq -r .core.run "$meta")))."
           } >> notes.md
@@ -499,7 +531,7 @@ jobs:
     name: App Store Connect
     needs: [version, publish]
     # Off until the API key is configured; betas have their own bundle id and stay out.
-    if: ${{ !failure() && !cancelled() && needs.version.outputs.publish == 'true' && needs.version.outputs.prerelease != 'true' && vars.ASC_KEY_ID != '' }}
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.version.outputs.prerelease != 'true' && vars.ASC_KEY_ID != '' }}
     permissions:
       contents: read
       actions: read
