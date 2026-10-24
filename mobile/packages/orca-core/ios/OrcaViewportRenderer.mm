@@ -1,18 +1,19 @@
 #import "OrcaViewportRenderer.h"
 
 #include "SessionRegistry.hpp"
+#include "viewport/ViewportController.hpp"
 
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
-#import <simd/simd.h>
 
-#include <algorithm>
-#include <array>
-#include <cmath>
+#include <memory>
 #include <vector>
 
-// The shader is compiled at runtime so the pod needs no metallib packaging.
+// The Metal backend of the viewport: the platform-neutral part (scene building, toolpath
+// segments and filtering, camera, picking, drag) lives in cpp/viewport/ and this file
+// only uploads its vectors and draws them. The shader is compiled at runtime so the pod
+// needs no metallib packaging.
 static const char* const kShaderSource = R"metal(
 #include <metal_stdlib>
 using namespace metal;
@@ -176,127 +177,50 @@ fragment float4 orca_bed_fragment(TexturedOut in [[stage_in]],
 
 namespace {
 
-struct Vertex {
-  float position[3];
-  float color[4];
-};
-
-// A mesh vertex is its position only; see orca_mesh_vertex.
-using MeshVertex = std::array<float, 3>;
-
-// One object's triangles within the mesh buffer, drawn with their own colour and, while
-// the object is dragged, the drag transform.
-struct MeshRange {
-  uint64_t id;
-  NSUInteger start;
-  NSUInteger count;
-};
-
-struct TexturedVertex {
-  float position[3];
-  float uv[2];
-};
-
-// Mirrors the shader's Segment: 36 bytes, 4-byte aligned, so any segment's offset is a
-// valid vertex buffer offset.
-struct Segment {
-  float a[3];
-  float b[3];
-  float width;
-  float height;
-  uint8_t color[4];
-};
-static_assert(sizeof(Segment) == 36, "Segment must match the shader's layout");
-// Vertices orca_ribbon_vertex expands one segment into: four faces of two triangles.
-constexpr NSUInteger kRibbonVertexCount = 24;
+using namespace orca::viewport;
 
 // 4x MSAA, which every iOS GPU supports.
 constexpr NSUInteger kSampleCount = 4;
 constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth32Float;
 
-struct Uniforms {
-  simd_float4x4 mvp;
-  simd_float4 lightDir;
-  simd_float4 eye;
-  simd_float4 color;
-  simd_float4 modelOffset;
-  simd_float4 dragAnchor;
-  simd_float4 dragParams;
-};
-
-struct Bounds {
-  simd_float3 min{1e30f, 1e30f, 1e30f};
-  simd_float3 max{-1e30f, -1e30f, -1e30f};
-  bool valid = false;
-  void add(simd_float3 p) {
-    min = simd_min(min, p);
-    max = simd_max(max, p);
-    valid = true;
-  }
-  simd_float3 center() const { return (min + max) * 0.5f; }
-  float radius() const { return valid ? simd_length(max - min) * 0.5f : 100.f; }
-};
-
-simd_float4x4 perspective(float fovyRadians, float aspect, float nearZ, float farZ) {
-  const float ys = 1.f / tanf(fovyRadians * 0.5f);
-  const float xs = ys / aspect;
-  const float zs = farZ / (nearZ - farZ);
-  return simd_matrix(simd_make_float4(xs, 0, 0, 0), simd_make_float4(0, ys, 0, 0), simd_make_float4(0, 0, zs, -1),
-                     simd_make_float4(0, 0, nearZ * zs, 0));
-}
-
-simd_float4x4 lookAt(simd_float3 eye, simd_float3 target, simd_float3 up) {
-  const simd_float3 z = simd_normalize(eye - target);
-  const simd_float3 x = simd_normalize(simd_cross(up, z));
-  const simd_float3 y = simd_cross(z, x);
-  return simd_matrix(simd_make_float4(x.x, y.x, z.x, 0), simd_make_float4(x.y, y.y, z.y, 0), simd_make_float4(x.z, y.z, z.z, 0),
-                     simd_make_float4(-simd_dot(x, eye), -simd_dot(y, eye), -simd_dot(z, eye), 1));
-}
-
-// Colours per PreviewRole, in enum order; the last entry is used for travel moves.
-const float kRoleColors[][4] = {
-    {0.50f, 0.50f, 0.50f, 1.f}, // None
-    {1.00f, 0.90f, 0.30f, 1.f}, // Perimeter
-    {1.00f, 0.49f, 0.22f, 1.f}, // ExternalPerimeter
-    {0.12f, 0.12f, 1.00f, 1.f}, // OverhangPerimeter
-    {0.69f, 0.19f, 0.16f, 1.f}, // InternalInfill
-    {0.59f, 0.33f, 0.80f, 1.f}, // SolidInfill
-    {0.94f, 0.25f, 0.25f, 1.f}, // TopSolidInfill
-    {0.40f, 0.36f, 0.78f, 1.f}, // BottomSurface
-    {1.00f, 0.55f, 0.41f, 1.f}, // Ironing
-    {0.30f, 0.50f, 0.73f, 1.f}, // BridgeInfill
-    {0.30f, 0.50f, 0.73f, 1.f}, // InternalBridgeInfill
-    {1.00f, 1.00f, 1.00f, 1.f}, // GapFill
-    {0.00f, 0.53f, 0.43f, 1.f}, // Skirt
-    {0.00f, 0.53f, 0.43f, 1.f}, // Brim
-    {0.00f, 1.00f, 0.00f, 1.f}, // Support
-    {0.00f, 0.50f, 0.00f, 1.f}, // SupportInterface
-    {0.35f, 0.60f, 0.30f, 1.f}, // SupportTransition
-    {0.70f, 0.65f, 0.15f, 1.f}, // WipeTower
-    {0.37f, 0.82f, 0.58f, 1.f}, // Custom
-    {0.50f, 0.50f, 0.50f, 1.f}, // Mixed
-    {0.10f, 0.60f, 1.00f, 1.f}, // Travel
-};
-constexpr size_t kTravelColor = sizeof(kRoleColors) / sizeof(kRoleColors[0]) - 1;
-
-void push(std::vector<Vertex>& out, simd_float3 p, const float* c) {
-  out.push_back(Vertex{{p.x, p.y, p.z}, {c[0], c[1], c[2], c[3]}});
-}
-
-// Appends the segment a→b and records the move it belongs to, which is what the
-// layer and time filters select on. Width and height are the bead's, zero for moves
-// drawn as lines.
-void pushSegment(std::vector<Segment>& out, std::vector<uint32_t>& moves, size_t move, const float* a, const float* b,
-                 const float* c, float width = 0.f, float height = 0.f) {
-  auto byte = [](float v) { return uint8_t(std::lround(std::clamp(v, 0.f, 1.f) * 255.f)); };
-  out.push_back(Segment{{a[0], a[1], a[2]}, {b[0], b[1], b[2]}, width, height, {byte(c[0]), byte(c[1]), byte(c[2]), byte(c[3])}});
-  moves.push_back(uint32_t(move));
-}
-
 // Uploads `items`, or returns nil for an empty list (Metal rejects zero-length buffers).
 template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::vector<T>& items) {
   return items.empty() ? nil
                        : [device newBufferWithBytes:items.data() length:items.size() * sizeof(T) options:MTLResourceStorageModeShared];
+}
+
+Mode toMode(OrcaViewportMode mode) {
+  return mode == OrcaViewportModePreview ? Mode::Preview : Mode::Scene;
+}
+
+OrcaViewportMode fromMode(Mode mode) {
+  return mode == Mode::Preview ? OrcaViewportModePreview : OrcaViewportModeScene;
+}
+
+ColorMode toColorMode(OrcaPreviewColorMode mode) {
+  switch (mode) {
+    case OrcaPreviewColorModeSpeed: return ColorMode::Speed;
+    case OrcaPreviewColorModeFlow: return ColorMode::Flow;
+    case OrcaPreviewColorModeLayerTime: return ColorMode::LayerTime;
+    case OrcaPreviewColorModeTool: return ColorMode::Tool;
+    case OrcaPreviewColorModeFeature:
+    default: return ColorMode::Feature;
+  }
+}
+
+OrcaPreviewColorMode fromColorMode(ColorMode mode) {
+  switch (mode) {
+    case ColorMode::Speed: return OrcaPreviewColorModeSpeed;
+    case ColorMode::Flow: return OrcaPreviewColorModeFlow;
+    case ColorMode::LayerTime: return OrcaPreviewColorModeLayerTime;
+    case ColorMode::Tool: return OrcaPreviewColorModeTool;
+    case ColorMode::Feature:
+    default: return OrcaPreviewColorModeFeature;
+  }
+}
+
+ObjectTool toObjectTool(NSInteger tool) {
+  return tool == 1 ? ObjectTool::Rotate : tool == 2 ? ObjectTool::Scale : ObjectTool::Move;
 }
 
 } // namespace
@@ -323,51 +247,21 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
   id<MTLTexture> _msaaDepth;
   BOOL _msaaStored;
 
+  std::unique_ptr<ViewportController> _controller;
+
+  // GPU copies of the controller's geometry, refreshed when its revisions change.
+  uint32_t _sceneRevision;
+  uint32_t _toolpathRevision;
   id<MTLBuffer> _meshBuffer;
-  std::vector<MeshRange> _meshRanges;
   id<MTLBuffer> _bedLineBuffer;
-  NSUInteger _bedLineVertexCount;
-  // Toolpath segments in G-code order, extrusions and the other moves (travel, wipe,
-  // retraction ticks) apart, each with the index of the move it came from.
-  // `_*Range` is the slice the layer and time filters currently select.
-  id<MTLBuffer> _extrusionBuffer;
-  std::vector<uint32_t> _extrusionMoves;
-  NSRange _extrusionRange;
-  id<MTLBuffer> _markerBuffer;
-  std::vector<uint32_t> _markerMoves;
-  NSRange _markerRange;
   id<MTLBuffer> _bedModelBuffer;
-  NSUInteger _bedModelVertexCount;
   id<MTLBuffer> _bedTextureQuadBuffer;
+  id<MTLBuffer> _extrusionBuffer;
+  id<MTLBuffer> _markerBuffer;
   id<MTLTexture> _bedTexture;
   NSString* _bedTextureLoadedPath;
   // Kept alive while the offscreen WKWebView renders an SVG bed art file.
   WKWebView* _svgRasterWebView;
-  id<WKNavigationDelegate> _svgNavigationDelegate;
-
-  Slic3r::Mobile::PreviewData _preview;
-  Bounds _bounds;
-
-  // Orbit camera, z up.
-  simd_float3 _target;
-  float _yaw;
-  float _pitch;
-  float _distance;
-
-  // Drag-to-move/rotate/scale state. Non-zero id while a drag is in flight.
-  // The interaction is chosen by `_dragTool`, and every drag frame just updates
-  // the drag-* fields that the shader applies to the dragged object's range at
-  // draw time — no per-frame mesh rebuild.
-  uint64_t _dragObjectId;
-  NSInteger _dragTool; // 0 = move, 1 = rotate, 2 = scale
-  simd_float3 _dragInitialPosition;
-  simd_float3 _dragInitialRotation;
-  simd_float3 _dragInitialScale;
-  simd_float2 _dragAnchorXY;   // world-space anchor point on the plate for move deltas
-  CGPoint     _dragStartScreen; // finger's initial screen position (for rotate / scale mapping)
-  simd_float3 _dragOffset;      // world-space translation applied by 'move'
-  float       _dragRotationZ;   // additional Z rotation applied by 'rotate' (radians)
-  float       _dragScaleFactor; // uniform scale multiplier applied by 'scale' (default 1)
 }
 
 - (instancetype)initWithView:(MTKView*)view {
@@ -375,19 +269,12 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
     _view = view;
     _device = MTLCreateSystemDefaultDevice();
     _queue = [_device newCommandQueue];
-    _minLayer = -1;
-    _maxLayer = -1;
-    _maxTime = -1.f;
-    _colorMode = OrcaPreviewColorModeFeature;
-    _target = simd_make_float3(0, 0, 0);
-    // Camera in the -Y front quadrant, slightly to the right (+X), so bed models
-    // authored with their front-facing labels on the -Y edge read correctly. Match
-    // desktop's convention: eye = (sin·cos, cos·cos, sin) · distance so
-    // yaw ≈ π − 0.6 gives (sin > 0, cos < 0) — front-right-looking-into +Y.
-    _target = simd_make_float3(0, 0, 0);
-    _yaw = float(M_PI) - 0.6f;
-    _pitch = 0.5f;
-    _distance = 400.f;
+    __weak MTKView* weakView = view;
+    _controller = std::make_unique<ViewportController>(
+        [](uint64_t id, const std::function<void(Slic3r::Mobile::Session&)>& fn) {
+          return margelo::nitro::orca::SessionRegistry::with(id, fn);
+        },
+        [weakView] { [weakView setNeedsDisplay]; });
 
     view.device = _device;
     // The renderer owns its multisampled depth target; see renderPassForDrawable:.
@@ -455,525 +342,225 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
   return self;
 }
 
+// Touch coordinates and the drag mappings are in points; tell the controller the view's
+// current size before anything that maps a point.
+- (void)syncViewSize {
+  MTKView* view = _view;
+  if (view == nil) return;
+  const CGSize size = view.bounds.size;
+  _controller->setViewSize(float(size.width), float(size.height));
+}
+
 #pragma mark - Properties
 
+- (void)setSessionId:(uint64_t)sessionId {
+  _controller->setSessionId(sessionId);
+}
+
+- (uint64_t)sessionId {
+  return _controller->sessionId();
+}
+
+- (void)setMode:(OrcaViewportMode)mode {
+  _controller->setMode(toMode(mode));
+}
+
+- (OrcaViewportMode)mode {
+  return fromMode(_controller->mode());
+}
+
 - (void)setMinLayer:(NSInteger)minLayer {
-  _minLayer = minLayer;
-  [self updateToolpathRange];
+  _controller->setMinLayer(minLayer);
+}
+
+- (NSInteger)minLayer {
+  return _controller->minLayer();
 }
 
 - (void)setMaxLayer:(NSInteger)maxLayer {
-  _maxLayer = maxLayer;
-  [self updateToolpathRange];
+  _controller->setMaxLayer(maxLayer);
+}
+
+- (NSInteger)maxLayer {
+  return _controller->maxLayer();
 }
 
 - (void)setMaxTime:(float)maxTime {
-  _maxTime = maxTime;
-  [self updateToolpathRange];
+  _controller->setMaxTime(maxTime);
+}
+
+- (float)maxTime {
+  return _controller->maxTime();
 }
 
 - (void)setShowTravels:(BOOL)showTravels {
-  _showTravels = showTravels;
-  [self rebuildToolpath];
+  _controller->setShowTravels(showTravels);
+}
+
+- (BOOL)showTravels {
+  return _controller->showTravels();
 }
 
 - (void)setShowRetractions:(BOOL)showRetractions {
-  _showRetractions = showRetractions;
-  [self rebuildToolpath];
+  _controller->setShowRetractions(showRetractions);
+}
+
+- (BOOL)showRetractions {
+  return _controller->showRetractions();
 }
 
 - (void)setShowWipes:(BOOL)showWipes {
-  _showWipes = showWipes;
-  [self rebuildToolpath];
+  _controller->setShowWipes(showWipes);
+}
+
+- (BOOL)showWipes {
+  return _controller->showWipes();
 }
 
 - (void)setColorMode:(OrcaPreviewColorMode)colorMode {
-  _colorMode = colorMode;
-  [self rebuildToolpath];
+  _controller->setColorMode(toColorMode(colorMode));
+}
+
+- (OrcaPreviewColorMode)colorMode {
+  return fromColorMode(_controller->colorMode());
 }
 
 - (void)setSelectedId:(uint64_t)selectedId {
-  if (_selectedId == selectedId) return;
-  _selectedId = selectedId;
-  [_view setNeedsDisplay];
+  _controller->setSelectedId(selectedId);
+}
+
+- (uint64_t)selectedId {
+  return _controller->selectedId();
 }
 
 #pragma mark - Geometry
 
 - (void)reload {
-  std::vector<MeshVertex> triangles;
-  std::vector<MeshRange> ranges;
-  std::vector<Vertex> bed;
-  std::vector<MeshVertex> bedModel;
-  std::vector<TexturedVertex> bedQuad;
-  std::string bedTexturePath;
-  Slic3r::Mobile::PreviewData preview;
-  Bounds bounds;
-  bool hasCustomBed = false;
+  _controller->reload();
+  [self syncBedTexture];
+}
 
-  const bool previewMode = _mode == OrcaViewportModePreview;
-  const bool found = margelo::nitro::orca::SessionRegistry::with(_sessionId, [&](Slic3r::Mobile::Session& session) {
-    // Bed outline and a 10 mm grid.
-    const Slic3r::Mobile::BedInfo info = session.bed();
-    const float grey[4] = {0.55f, 0.58f, 0.60f, 1.f};
-    const float light[4] = {0.78f, 0.80f, 0.82f, 1.f};
-    float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
-    if (info.shape.size() >= 2) {
-      for (size_t i = 0; i < info.shape.size(); ++i) {
-        const auto& a = info.shape[i];
-        const auto& b = info.shape[(i + 1) % info.shape.size()];
-        push(bed, simd_make_float3(float(a[0]), float(a[1]), 0), grey);
-        push(bed, simd_make_float3(float(b[0]), float(b[1]), 0), grey);
-        minX = std::min(minX, float(a[0]));
-        maxX = std::max(maxX, float(a[0]));
-        minY = std::min(minY, float(a[1]));
-        maxY = std::max(maxY, float(a[1]));
-      }
-      for (float x = std::ceil(minX / 10.f) * 10.f; x < maxX; x += 10.f) {
-        push(bed, simd_make_float3(x, minY, 0), light);
-        push(bed, simd_make_float3(x, maxY, 0), light);
-      }
-      for (float y = std::ceil(minY / 10.f) * 10.f; y < maxY; y += 10.f) {
-        push(bed, simd_make_float3(minX, y, 0), light);
-        push(bed, simd_make_float3(maxX, y, 0), light);
-      }
-      bounds.add(simd_make_float3(minX, minY, 0));
-      bounds.add(simd_make_float3(maxX, maxY, 0));
-    }
-    hasCustomBed = ! info.custom_texture.empty() || ! info.model_mesh.positions.empty();
-    // Preloaded custom bed model (STL) — draw as a translucent grey slab so it
-    // sits under the plate outline and reads as the printer's real bed.
-    if (! info.model_mesh.positions.empty()) {
-      const auto& mesh = info.model_mesh;
-      bedModel.reserve(mesh.positions.size() / 3);
-      for (size_t i = 0; i + 8 < mesh.positions.size(); i += 3) {
-        bedModel.push_back({mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]});
-      }
-    }
-    // Bed texture quad — mapped to the bounding rect of the printable area.
-    if (! info.custom_texture.empty() && info.shape.size() >= 2) {
-      bedTexturePath = info.custom_texture;
-      const float z = 0.02f; // slight lift so it sits above the model / z-fights nothing
-      auto pushTex = [&](float x, float y, float u, float v) {
-        TexturedVertex tv{{x, y, z}, {u, v}};
-        bedQuad.push_back(tv);
-      };
-      // Two triangles, CCW seen from +Z.
-      pushTex(minX, minY, 0.f, 1.f);
-      pushTex(maxX, minY, 1.f, 1.f);
-      pushTex(maxX, maxY, 1.f, 0.f);
-      pushTex(minX, minY, 0.f, 1.f);
-      pushTex(maxX, maxY, 1.f, 0.f);
-      pushTex(minX, maxY, 0.f, 0.f);
-    }
-
-    if (previewMode) {
-      preview = session.preview();
-      for (const auto& v : preview.vertices) {
-        if (v.type == Slic3r::Mobile::PreviewMoveType::Extrude) {
-          bounds.add(simd_make_float3(v.position[0], v.position[1], v.position[2]));
-        }
-      }
-    } else {
-      for (const Slic3r::Mobile::ObjectInfo& object : session.objects()) {
-        const Slic3r::Mobile::MeshData mesh = session.mesh(object.id);
-        const size_t before = triangles.size();
-        triangles.reserve(before + mesh.triangles * 3);
-        for (size_t i = 0; i + 2 < mesh.positions.size(); i += 3) {
-          triangles.push_back({mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]});
-          bounds.add(simd_make_float3(mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]));
-        }
-        ranges.push_back({object.id, before, triangles.size() - before});
-      }
-    }
-  });
-  if (!found) {
-    // Unknown session or a slice in progress: keep what is on screen.
-    return;
-  }
-
-  _bedLineVertexCount = bed.size();
-  _bedLineBuffer = makeBuffer(_device, bed);
-  _preview = std::move(preview);
-  const bool hadBounds = _bounds.valid;
-  _bounds = bounds;
-  _meshRanges = std::move(ranges);
-  _meshBuffer = makeBuffer(_device, triangles);
-  _bedModelVertexCount = bedModel.size();
-  _bedModelBuffer = makeBuffer(_device, bedModel);
-  _bedTextureQuadBuffer = bedQuad.empty() ? nil
-                                          : [_device newBufferWithBytes:bedQuad.data()
-                                                                 length:bedQuad.size() * sizeof(TexturedVertex)
-                                                                options:MTLResourceStorageModeShared];
-  // Load the PNG (or JPG) bed texture. MTKTextureLoader handles both. Only
-  // reload when the path changed, so a slice does not thrash the texture.
-  NSString* wantedPath = bedTexturePath.empty() ? nil : [NSString stringWithUTF8String:bedTexturePath.c_str()];
+// Loads the bed texture the scene names, only when the path changed, so a slice does not
+// thrash the texture. MTKTextureLoader handles PNG and JPG; SVG goes through WKWebView.
+- (void)syncBedTexture {
+  const std::string& path = _controller->scene().bedTexturePath;
+  NSString* wantedPath = path.empty() ? nil : [NSString stringWithUTF8String:path.c_str()];
   if (wantedPath == nil) {
     _bedTexture = nil;
     _bedTextureLoadedPath = nil;
-  } else if (![wantedPath isEqualToString:_bedTextureLoadedPath]) {
-    _bedTextureLoadedPath = wantedPath;
-    if ([wantedPath.pathExtension.lowercaseString isEqualToString:@"svg"]) {
-      // MTKTextureLoader does not decode SVG. Rasterize the vector art
-      // through WKWebView (which handles SVG natively) and hand the
-      // resulting bitmap to Metal when the snapshot returns. The STL bed
-      // model draws immediately underneath, so the plate is never empty.
-      _bedTexture = nil;
-      [self loadSVGBedTexture:wantedPath];
-    } else {
-      NSURL* url = [NSURL fileURLWithPath:wantedPath];
-      NSError* error = nil;
-      _bedTexture = [_textureLoader newTextureWithContentsOfURL:url
-                                                         options:@{ MTKTextureLoaderOptionSRGB : @NO,
-                                                                    MTKTextureLoaderOptionOrigin : MTKTextureLoaderOriginBottomLeft }
-                                                           error:&error];
-      if (_bedTexture == nil) {
-        NSLog(@"OrcaViewport: bed texture load failed for %@: %@", wantedPath, error);
-      }
+    return;
+  }
+  if ([wantedPath isEqualToString:_bedTextureLoadedPath]) return;
+  _bedTextureLoadedPath = wantedPath;
+  if ([wantedPath.pathExtension.lowercaseString isEqualToString:@"svg"]) {
+    // The STL bed model draws immediately underneath, so the plate is never empty
+    // while the snapshot is pending.
+    _bedTexture = nil;
+    [self loadSVGBedTexture:wantedPath];
+  } else {
+    NSURL* url = [NSURL fileURLWithPath:wantedPath];
+    NSError* error = nil;
+    _bedTexture = [_textureLoader newTextureWithContentsOfURL:url
+                                                       options:@{ MTKTextureLoaderOptionSRGB : @NO,
+                                                                  MTKTextureLoaderOptionOrigin : MTKTextureLoaderOriginBottomLeft }
+                                                         error:&error];
+    if (_bedTexture == nil) {
+      NSLog(@"OrcaViewport: bed texture load failed for %@: %@", wantedPath, error);
     }
   }
-  [self rebuildToolpath];
-  if (!hadBounds) {
-    [self fit];
-  }
-  [_view setNeedsDisplay];
 }
 
-- (void)rebuildToolpath {
-  std::vector<Segment> extrusions;
-  std::vector<Segment> markers;
-  _extrusionMoves.clear();
-  _markerMoves.clear();
-  if (_mode == OrcaViewportModePreview && _preview.vertices.size() > 1) {
-    extrusions.reserve(_preview.vertices.size());
-    _extrusionMoves.reserve(_preview.vertices.size());
-    // Precompute the max feedrate / volumetric rate / layer time so the
-    // gradient spans a stable range regardless of how fast, thick or slow
-    // the print is.
-    float maxFeedrate = 0.f;
-    float maxVolumetric = 0.f;
-    float maxLayerTime = 0.f;
-    if (_colorMode == OrcaPreviewColorModeSpeed || _colorMode == OrcaPreviewColorModeFlow) {
-      for (const auto& v : _preview.vertices) {
-        if (v.type != Slic3r::Mobile::PreviewMoveType::Extrude) continue;
-        maxFeedrate   = std::max(maxFeedrate,   v.feedrate);
-        maxVolumetric = std::max(maxVolumetric, v.volumetric_rate);
-      }
-    } else if (_colorMode == OrcaPreviewColorModeLayerTime) {
-      for (float t : _preview.layer_times) maxLayerTime = std::max(maxLayerTime, t);
-    }
-    auto colorForRate = [](float value, float maxValue, float out[4]) {
-      const float t = maxValue > 0 ? std::clamp(value / maxValue, 0.f, 1.f) : 0.f;
-      // Simple three-stop gradient: blue → green → red.
-      if (t < 0.5f) {
-        const float k = t / 0.5f;
-        out[0] = 0.f;  out[1] = k;         out[2] = 1.f - k;
-      } else {
-        const float k = (t - 0.5f) / 0.5f;
-        out[0] = k;    out[1] = 1.f - k;   out[2] = 0.f;
-      }
-      out[3] = 1.f;
-    };
-    for (size_t i = 1; i < _preview.vertices.size(); ++i) {
-      const Slic3r::Mobile::PreviewVertex& a = _preview.vertices[i - 1];
-      const Slic3r::Mobile::PreviewVertex& b = _preview.vertices[i];
-      const float* color = nullptr;
-      float dynamic[4];
-      if (b.type == Slic3r::Mobile::PreviewMoveType::Extrude) {
-        switch (_colorMode) {
-          case OrcaPreviewColorModeSpeed:
-            colorForRate(b.feedrate, maxFeedrate, dynamic);
-            color = dynamic;
-            break;
-          case OrcaPreviewColorModeFlow:
-            colorForRate(b.volumetric_rate, maxVolumetric, dynamic);
-            color = dynamic;
-            break;
-          case OrcaPreviewColorModeTool: {
-            const size_t idx = b.extruder_id;
-            if (idx < _preview.tool_colors.size()) {
-              const auto& c = _preview.tool_colors[idx];
-              dynamic[0] = c[0]; dynamic[1] = c[1]; dynamic[2] = c[2]; dynamic[3] = c[3];
-              color = dynamic;
-            } else {
-              color = kRoleColors[static_cast<size_t>(b.role)];
-            }
-            break;
-          }
-          case OrcaPreviewColorModeLayerTime: {
-            const float t = (b.layer_id < _preview.layer_times.size()) ? _preview.layer_times[b.layer_id] : 0.f;
-            colorForRate(t, maxLayerTime, dynamic);
-            color = dynamic;
-            break;
-          }
-          case OrcaPreviewColorModeFeature:
-          default:
-            color = kRoleColors[std::min(static_cast<size_t>(b.role), kTravelColor - 1)];
-            break;
-        }
-        pushSegment(extrusions, _extrusionMoves, i, a.position, b.position, color, b.width, b.height);
-      } else if (_showTravels && b.type == Slic3r::Mobile::PreviewMoveType::Travel) {
-        pushSegment(markers, _markerMoves, i, a.position, b.position, kRoleColors[kTravelColor]);
-      } else if (_showWipes && b.type == Slic3r::Mobile::PreviewMoveType::Wipe) {
-        static const float wipe[4] = {0.90f, 0.70f, 0.10f, 1.f};
-        pushSegment(markers, _markerMoves, i, a.position, b.position, wipe);
-      } else if (_showRetractions && (b.type == Slic3r::Mobile::PreviewMoveType::Retract
-                                      || b.type == Slic3r::Mobile::PreviewMoveType::Unretract)) {
-        // Draw a short vertical tick at the position as a stand-in marker.
-        static const float retract[4] = {0.95f, 0.20f, 0.20f, 1.f};
-        const float top[3] = {b.position[0], b.position[1], b.position[2] + 0.6f};
-        pushSegment(markers, _markerMoves, i, b.position, top, retract);
-      }
-    }
+// Re-uploads whatever the controller rebuilt since the last frame.
+- (void)syncBuffers {
+  if (_sceneRevision != _controller->sceneRevision()) {
+    const SceneGeometry& scene = _controller->scene();
+    _bedLineBuffer = makeBuffer(_device, scene.bedLines);
+    _bedModelBuffer = makeBuffer(_device, scene.bedModel);
+    _bedTextureQuadBuffer = makeBuffer(_device, scene.bedQuad);
+    _meshBuffer = makeBuffer(_device, scene.mesh);
+    _sceneRevision = _controller->sceneRevision();
   }
-  _extrusionBuffer = makeBuffer(_device, extrusions);
-  _markerBuffer = makeBuffer(_device, markers);
-  [self updateToolpathRange];
-}
-
-// Narrows the drawn toolpath to the layer and time filters without touching the
-// buffers. Moves come in G-code order, where layer ids and print time only grow, so
-// each filter is a prefix or suffix of the moves and a binary search finds it.
-- (void)updateToolpathRange {
-  const auto& moves = _preview.vertices;
-  size_t lo = 0;
-  size_t hi = moves.size();
-  if (_minLayer >= 0) {
-    const unsigned int minLayer = static_cast<unsigned int>(_minLayer);
-    lo = std::partition_point(moves.begin(), moves.end(), [&](const auto& v) { return v.layer_id < minLayer; }) - moves.begin();
+  if (_toolpathRevision != _controller->toolpathRevision()) {
+    const Toolpath& toolpath = _controller->toolpath();
+    _extrusionBuffer = makeBuffer(_device, toolpath.extrusions);
+    _markerBuffer = makeBuffer(_device, toolpath.markers);
+    _toolpathRevision = _controller->toolpathRevision();
   }
-  if (_maxLayer >= 0) {
-    const unsigned int maxLayer = static_cast<unsigned int>(_maxLayer);
-    hi = std::partition_point(moves.begin(), moves.end(), [&](const auto& v) { return v.layer_id <= maxLayer; }) - moves.begin();
-  }
-  if (_maxTime >= 0.f) {
-    const float maxTime = _maxTime;
-    hi = std::min<size_t>(hi, std::partition_point(moves.begin(), moves.end(), [&](const auto& v) { return v.time <= maxTime; }) - moves.begin());
-  }
-  auto range = [&](const std::vector<uint32_t>& segmentMoves) {
-    const size_t first = std::lower_bound(segmentMoves.begin(), segmentMoves.end(), lo) - segmentMoves.begin();
-    const size_t last = std::lower_bound(segmentMoves.begin(), segmentMoves.end(), std::max(lo, hi)) - segmentMoves.begin();
-    return NSMakeRange(first, last - first);
-  };
-  _extrusionRange = range(_extrusionMoves);
-  _markerRange = range(_markerMoves);
-  [_view setNeedsDisplay];
 }
 
 #pragma mark - Camera
 
 - (void)fit {
-  _target = _bounds.valid ? _bounds.center() : simd_make_float3(0, 0, 0);
-  const float radius = std::max(_bounds.radius(), 20.f);
-  _distance = radius / sinf(0.35f) * 1.15f;
-  [_view setNeedsDisplay];
+  _controller->fit();
 }
 
 - (void)orbitBy:(CGPoint)delta {
-  _yaw += float(delta.x) * 0.01f;
-  _pitch = std::clamp(_pitch + float(delta.y) * 0.01f, -1.5f, 1.5f);
-  [_view setNeedsDisplay];
+  _controller->orbitBy(float(delta.x), float(delta.y));
 }
 
 - (void)panBy:(CGPoint)delta {
-  // Move the target in the camera's screen plane, scaled so a drag follows the finger.
-  const float scale = _distance * 0.0015f;
-  const simd_float3 forward = simd_normalize(simd_make_float3(sinf(_yaw) * cosf(_pitch), cosf(_yaw) * cosf(_pitch), sinf(_pitch)));
-  const simd_float3 right = simd_normalize(simd_cross(forward, simd_make_float3(0, 0, 1)));
-  const simd_float3 upv = simd_cross(right, forward);
-  _target = _target - right * (float(delta.x) * scale) + upv * (float(delta.y) * scale);
-  [_view setNeedsDisplay];
+  _controller->panBy(float(delta.x), float(delta.y));
 }
 
 - (void)zoomBy:(CGFloat)factor {
-  if (factor > 0) {
-    _distance = std::clamp(_distance / float(factor), 5.f, 5000.f);
-    [_view setNeedsDisplay];
-  }
-}
-
-- (simd_float3)eye {
-  return _target + simd_make_float3(sinf(_yaw) * cosf(_pitch), cosf(_yaw) * cosf(_pitch), sinf(_pitch)) * _distance;
-}
-
-- (simd_float4x4)viewProjectionForSize:(CGSize)size {
-  const simd_float4x4 view = lookAt([self eye], _target, simd_make_float3(0, 0, 1));
-  const float aspect = size.height > 0 ? float(size.width / size.height) : 1.f;
-  const simd_float4x4 projection = perspective(0.7f, aspect, std::max(_distance * 0.01f, 0.1f), _distance * 10.f + 1000.f);
-  return simd_mul(projection, view);
+  _controller->zoomBy(float(factor));
 }
 
 - (void)screenToRayFromX:(CGFloat)x
                        y:(CGFloat)y
                originOut:(vector_float3*)originOut
             directionOut:(vector_float3*)directionOut {
-  MTKView* view = _view;
-  if (view == nil || originOut == NULL || directionOut == NULL) return;
-  // Points → NDC ([-1, 1], y-up in NDC vs y-down for touches).
-  const CGSize sz = view.bounds.size;
-  if (sz.width <= 0 || sz.height <= 0) return;
-  const float nx = float(x / sz.width)  * 2.f - 1.f;
-  const float ny = 1.f - float(y / sz.height) * 2.f;
-
-  const simd_float4x4 vp = [self viewProjectionForSize:sz];
-  const simd_float4x4 invVP = simd_inverse(vp);
-  simd_float4 nearP = simd_mul(invVP, simd_make_float4(nx, ny, 0.f, 1.f));
-  simd_float4 farP  = simd_mul(invVP, simd_make_float4(nx, ny, 1.f, 1.f));
-  nearP /= nearP.w;
-  farP  /= farP.w;
-  const simd_float3 origin    = simd_make_float3(nearP.x, nearP.y, nearP.z);
-  const simd_float3 direction = simd_normalize(simd_make_float3(farP.x - nearP.x, farP.y - nearP.y, farP.z - nearP.z));
-  *originOut = origin;
-  *directionOut = direction;
+  if (originOut == NULL || directionOut == NULL) return;
+  [self syncViewSize];
+  float3 origin;
+  float3 direction;
+  if (!_controller->screenToRay(float(x), float(y), origin, direction)) return;
+  *originOut = simd_make_float3(origin.x, origin.y, origin.z);
+  *directionOut = simd_make_float3(direction.x, direction.y, direction.z);
 }
 
 - (BOOL)screenToPlateXYFromX:(CGFloat)x y:(CGFloat)y outX:(CGFloat*)outX outY:(CGFloat*)outY {
   if (outX == NULL || outY == NULL) return NO;
-  simd_float3 origin;
-  simd_float3 direction;
-  [self screenToRayFromX:x y:y originOut:&origin directionOut:&direction];
-  // Ray hits Z=0 where origin.z + t * direction.z == 0. Reject grazing angles;
-  // they'd project the finger to points miles from the plate.
-  if (fabsf(direction.z) < 1e-4f) return NO;
-  const float t = -origin.z / direction.z;
-  if (t <= 0.f) return NO;
-  *outX = CGFloat(origin.x + direction.x * t);
-  *outY = CGFloat(origin.y + direction.y * t);
+  [self syncViewSize];
+  float plateX = 0, plateY = 0;
+  if (!_controller->screenToPlateXY(float(x), float(y), plateX, plateY)) return NO;
+  *outX = plateX;
+  *outY = plateY;
   return YES;
 }
 
 - (uint64_t)pickObjectAtScreenX:(CGFloat)x y:(CGFloat)y {
-  simd_float3 origin;
-  simd_float3 direction;
-  [self screenToRayFromX:x y:y originOut:&origin directionOut:&direction];
-  uint64_t hitId = 0;
-  margelo::nitro::orca::SessionRegistry::with(_sessionId, [&](Slic3r::Mobile::Session& session) {
-    const Slic3r::Mobile::Session::PickHit hit = session.pick_at(
-      { double(origin.x), double(origin.y), double(origin.z) },
-      { double(direction.x), double(direction.y), double(direction.z) });
-    hitId = static_cast<uint64_t>(hit.id);
-  });
-  return hitId;
+  [self syncViewSize];
+  return _controller->pickObject(float(x), float(y));
 }
 
 - (void)setObjectTool:(NSInteger)tool {
-  // Ignore mid-gesture changes — the drag in progress keeps its current tool
-  // until release. Changes only affect the NEXT drag.
-  if (_dragObjectId == 0) {
-    _dragTool = tool;
-  }
+  _controller->setObjectTool(toObjectTool(tool));
 }
 
 - (BOOL)beginDragObject:(uint64_t)objectId atScreenX:(CGFloat)x y:(CGFloat)y {
-  if (objectId == 0) return NO;
-  CGFloat anchorX = 0, anchorY = 0;
-  if (![self screenToPlateXYFromX:x y:y outX:&anchorX outY:&anchorY]) return NO;
-
-  BOOL found = NO;
-  simd_float3 initialPos = simd_make_float3(0, 0, 0);
-  simd_float3 initialRot = simd_make_float3(0, 0, 0);
-  simd_float3 initialSca = simd_make_float3(1, 1, 1);
-  margelo::nitro::orca::SessionRegistry::with(_sessionId, [&](Slic3r::Mobile::Session& session) {
-    for (const Slic3r::Mobile::ObjectInfo& obj : session.objects()) {
-      if (obj.id != objectId) continue;
-      initialPos = simd_make_float3(float(obj.position[0]), float(obj.position[1]), float(obj.position[2]));
-      initialRot = simd_make_float3(float(obj.rotation[0]), float(obj.rotation[1]), float(obj.rotation[2]));
-      initialSca = simd_make_float3(float(obj.scale[0]),    float(obj.scale[1]),    float(obj.scale[2]));
-      found = YES;
-      break;
-    }
-  });
-  if (!found) return NO;
-
-  _dragObjectId        = objectId;
-  _dragInitialPosition = initialPos;
-  _dragInitialRotation = initialRot;
-  _dragInitialScale    = initialSca;
-  _dragAnchorXY        = simd_make_float2(float(anchorX), float(anchorY));
-  _dragStartScreen     = CGPointMake(x, y);
-  _dragOffset          = simd_make_float3(0, 0, 0);
-  _dragRotationZ       = 0.f;
-  _dragScaleFactor     = 1.f;
-  // `dragToScreenX:` updates only the drag uniforms + setNeedsDisplay — no per-frame
-  // mesh rebuild.
-  [_view setNeedsDisplay];
-  return YES;
+  [self syncViewSize];
+  return _controller->beginDrag(objectId, float(x), float(y));
 }
 
 - (void)dragToScreenX:(CGFloat)x y:(CGFloat)y {
-  if (_dragObjectId == 0) return;
-  switch (_dragTool) {
-    case 1: {
-      // Rotate: horizontal finger travel controls angle. Full screen width ≈ π
-      // rad — sensitive enough for fine adjustments, coarse enough to flip 180°.
-      const CGFloat dx = x - _dragStartScreen.x;
-      const CGFloat viewWidth = _view != nil ? _view.bounds.size.width : 400;
-      const float pxPerPi = viewWidth > 0 ? float(viewWidth) : 400.f;
-      _dragRotationZ = float(dx) / pxPerPi * float(M_PI);
-      break;
-    }
-    case 2: {
-      // Scale: vertical finger travel controls uniform scale, up = grow, down =
-      // shrink. Clamp to a reasonable range so a stray drag can't zero the mesh.
-      const CGFloat dy = _dragStartScreen.y - y; // positive when finger moved up
-      const CGFloat viewHeight = _view != nil ? _view.bounds.size.height : 400;
-      const float halfPx = viewHeight > 0 ? float(viewHeight) * 0.5f : 200.f;
-      const float exponent = float(dy) / halfPx; // ±1 across half the view
-      _dragScaleFactor = std::clamp(powf(2.f, exponent), 0.1f, 10.f);
-      break;
-    }
-    default: {
-      // Move: keep the finger's initial plate anchor sticking to the finger.
-      CGFloat plateX = 0, plateY = 0;
-      if (![self screenToPlateXYFromX:x y:y outX:&plateX outY:&plateY]) return;
-      _dragOffset = simd_make_float3(
-        float(plateX) - _dragAnchorXY.x,
-        float(plateY) - _dragAnchorXY.y,
-        0.f);
-      break;
-    }
-  }
-  [_view setNeedsDisplay];
+  [self syncViewSize];
+  _controller->dragTo(float(x), float(y));
 }
 
 - (void)endDrag {
-  if (_dragObjectId == 0) return;
-  const Slic3r::Mobile::Vec3 newPos = {
-    double(_dragInitialPosition.x + _dragOffset.x),
-    double(_dragInitialPosition.y + _dragOffset.y),
-    double(_dragInitialPosition.z + _dragOffset.z),
-  };
-  const Slic3r::Mobile::Vec3 rot = {
-    double(_dragInitialRotation.x),
-    double(_dragInitialRotation.y),
-    double(_dragInitialRotation.z + _dragRotationZ),
-  };
-  const Slic3r::Mobile::Vec3 sca = {
-    double(_dragInitialScale.x * _dragScaleFactor),
-    double(_dragInitialScale.y * _dragScaleFactor),
-    double(_dragInitialScale.z * _dragScaleFactor),
-  };
-  const uint64_t objectId = _dragObjectId;
-  const NSInteger tool = _dragTool;
-  margelo::nitro::orca::SessionRegistry::with(_sessionId, [&](Slic3r::Mobile::Session& session) {
-    session.set_transform(static_cast<unsigned long>(objectId), newPos, rot, sca);
-    const char* label = tool == 1 ? "Rotate" : tool == 2 ? "Scale" : "Move object";
-    session.take_snapshot(label);
-  });
-  _dragObjectId    = 0;
-  _dragOffset      = simd_make_float3(0, 0, 0);
-  _dragRotationZ   = 0.f;
-  _dragScaleFactor = 1.f;
-  [self reload];
+  _controller->endDrag();
+  [self syncBedTexture];
 }
 
 - (BOOL)isDragging {
-  return _dragObjectId != 0;
+  return _controller->isDragging();
 }
 
 #pragma mark - MTKViewDelegate
 
 - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size {
+  [self syncViewSize];
   [view setNeedsDisplay];
 }
 
@@ -1021,82 +608,62 @@ template <typename T> id<MTLBuffer> makeBuffer(id<MTLDevice> device, const std::
   if (drawable == nil) {
     return;
   }
+  [self syncBuffers];
   MTLRenderPassDescriptor* pass = [self renderPassForDrawable:drawable clearColor:view.clearColor];
 
-  Uniforms uniforms;
-  uniforms.mvp = [self viewProjectionForSize:view.drawableSize];
-  uniforms.lightDir = simd_make_float4(0.3f, -0.5f, 0.8f, 0);
-  uniforms.eye = simd_make_float4([self eye], 1);
-  uniforms.modelOffset = simd_make_float4(0, 0, 0, 0);
-  uniforms.dragAnchor = simd_make_float4(0, 0, 0, 0);
-  uniforms.dragParams = simd_make_float4(0, 1, 0, 0); // no rotation, identity scale
+  const CGSize drawableSize = view.drawableSize;
+  Uniforms uniforms = _controller->frameUniforms(float(drawableSize.width), float(drawableSize.height));
+  const ToolpathRanges& ranges = _controller->ranges();
 
   id<MTLCommandBuffer> commands = [_queue commandBuffer];
   id<MTLRenderCommandEncoder> encoder = [commands renderCommandEncoderWithDescriptor:pass];
   [encoder setDepthStencilState:_depthState];
   [encoder setCullMode:MTLCullModeNone];
 
-  // Custom bed model (STL) first — it sits under everything.
+  // Custom bed model (STL) first; it sits under everything.
   if (_bedModelBuffer != nil && _meshPipeline != nil) {
-    uniforms.color = simd_make_float4(0.24f, 0.26f, 0.28f, 1.f);
+    const Uniforms bed = _controller->bedModelUniforms(uniforms);
     [encoder setRenderPipelineState:_meshPipeline];
     [encoder setVertexBuffer:_bedModelBuffer offset:0 atIndex:0];
-    [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
-    [encoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:1];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:_bedModelVertexCount];
+    [encoder setVertexBytes:&bed length:sizeof(bed) atIndex:1];
+    [encoder setFragmentBytes:&bed length:sizeof(bed) atIndex:1];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:_controller->scene().bedModel.size()];
   }
-  // Bed texture quad — draws on top of the STL / directly on the polygon.
+  // Bed texture quad, on top of the STL or directly on the polygon.
   if (_bedTextureQuadBuffer != nil && _bedTexture != nil && _bedTexturePipeline != nil) {
     [encoder setRenderPipelineState:_bedTexturePipeline];
     [encoder setVertexBuffer:_bedTextureQuadBuffer offset:0 atIndex:0];
     [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
     [encoder setFragmentTexture:_bedTexture atIndex:0];
     [encoder setFragmentSamplerState:_bedSampler atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:_controller->scene().bedQuad.size()];
   }
 
   [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
   // One instance per segment; the buffer offset selects the filtered range. Extrusions
   // are ribbons at the bead's width and height, the other moves thin lines.
-  if (_ribbonPipeline != nil && _extrusionBuffer != nil && _extrusionRange.length > 0) {
+  if (_ribbonPipeline != nil && _extrusionBuffer != nil && ranges.extrusions.count > 0) {
     [encoder setRenderPipelineState:_ribbonPipeline];
-    [encoder setVertexBuffer:_extrusionBuffer offset:_extrusionRange.location * sizeof(Segment) atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:kRibbonVertexCount instanceCount:_extrusionRange.length];
+    [encoder setVertexBuffer:_extrusionBuffer offset:ranges.extrusions.first * sizeof(Segment) atIndex:0];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:kRibbonVertexCount instanceCount:ranges.extrusions.count];
   }
-  if (_segmentLinePipeline != nil && _markerBuffer != nil && _markerRange.length > 0) {
+  if (_segmentLinePipeline != nil && _markerBuffer != nil && ranges.markers.count > 0) {
     [encoder setRenderPipelineState:_segmentLinePipeline];
-    [encoder setVertexBuffer:_markerBuffer offset:_markerRange.location * sizeof(Segment) atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:2 instanceCount:_markerRange.length];
+    [encoder setVertexBuffer:_markerBuffer offset:ranges.markers.first * sizeof(Segment) atIndex:0];
+    [encoder drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:2 instanceCount:ranges.markers.count];
   }
   [encoder setRenderPipelineState:_pipeline];
   if (_bedLineBuffer != nil) {
     [encoder setVertexBuffer:_bedLineBuffer offset:0 atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:_bedLineVertexCount];
+    [encoder drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:_controller->scene().bedLines.size()];
   }
   if (_meshBuffer != nil && _meshPipeline != nil) {
-    // Neutral sage body; amber for the selected object, mirroring the desktop's
-    // selection tint.
-    const simd_float4 body = simd_make_float4(0.55f, 0.72f, 0.62f, 1.f);
-    const simd_float4 selected = simd_make_float4(1.00f, 0.72f, 0.30f, 1.f);
     [encoder setRenderPipelineState:_meshPipeline];
     [encoder setVertexBuffer:_meshBuffer offset:0 atIndex:0];
-    for (const MeshRange& range : _meshRanges) {
-      uniforms.color = (_selectedId != 0 && range.id == _selectedId) ? selected : body;
-      if (_dragObjectId != 0 && range.id == _dragObjectId) {
-        // The dragged object picks up per-frame rotation + scale from
-        // `_dragRotationZ` / `_dragScaleFactor`, applied around the object's
-        // instance origin (`_dragInitialPosition`). Move tool leaves those at
-        // (0, 1) so only `modelOffset` acts.
-        uniforms.modelOffset = simd_make_float4(_dragOffset.x, _dragOffset.y, _dragOffset.z, 0);
-        uniforms.dragAnchor  = simd_make_float4(_dragInitialPosition.x, _dragInitialPosition.y, _dragInitialPosition.z, 0);
-        uniforms.dragParams  = simd_make_float4(_dragRotationZ, _dragScaleFactor, 0, 0);
-      } else {
-        uniforms.modelOffset = simd_make_float4(0, 0, 0, 0);
-        uniforms.dragAnchor  = simd_make_float4(0, 0, 0, 0);
-        uniforms.dragParams  = simd_make_float4(0, 1, 0, 0);
-      }
-      [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
-      [encoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:1];
+    for (const MeshRange& range : _controller->scene().meshRanges) {
+      const Uniforms mesh = _controller->meshUniforms(uniforms, range);
+      [encoder setVertexBytes:&mesh length:sizeof(mesh) atIndex:1];
+      [encoder setFragmentBytes:&mesh length:sizeof(mesh) atIndex:1];
       [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:range.start vertexCount:range.count];
     }
   }

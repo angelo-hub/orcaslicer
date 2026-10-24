@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -188,8 +189,14 @@ function OptionRow({
             multiline={kind === 'code'}
             autoCorrect={false}
             autoCapitalize="none"
+            // numbers-and-punctuation is iOS only; Android's numeric keyboard has the
+            // minus sign and the decimal point.
             keyboardType={
-              kind === 'number' || kind === 'percent' ? 'numbers-and-punctuation' : 'default'
+              kind === 'number' || kind === 'percent'
+                ? Platform.OS === 'ios'
+                  ? 'numbers-and-punctuation'
+                  : 'numeric'
+                : 'default'
             }
             onChangeText={setDraft}
             onBlur={() => {
