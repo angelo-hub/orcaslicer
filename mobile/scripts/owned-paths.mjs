@@ -34,6 +34,8 @@ export const OWNED_PATHS = [
   'deps/deps-ios.cmake',
   'deps/deps-android.cmake',
   '.github/workflows/build_ios.yml',
+  '.github/workflows/build_android_core.yml',
+  '.github/workflows/build_android_app.yml',
   '.github/workflows/mobile_release.yml',
 ]
 

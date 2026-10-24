@@ -148,10 +148,6 @@ final class OrcaViewportView: MTKView, UIGestureRecognizerDelegate {
   }
 
   @objc private func onSingleTapGesture(_ gesture: UITapGestureRecognizer) {
-    // TEMP DIAG: log every time the gesture recognizer transitions, so we can
-    // tell whether taps are reaching the metal view at all.
-    NSLog("[Orca] onSingleTapGesture state=%ld closureIsNil=%d",
-          Int(gesture.state.rawValue), onSingleTap == nil ? 1 : 0)
     guard gesture.state == .ended else { return }
     onSingleTap?(gesture.location(in: self))
   }
@@ -221,21 +217,13 @@ class HybridOrcaViewport: HybridOrcaViewportSpec {
 
   // Nitrogen generates the callback prop declaration in HybridOrcaViewportSpec; the
   // concrete subclass holds the stored value and the metalView forwards taps into it.
-  var onTap: ((_ x: Double, _ y: Double) -> Void)? {
-    // TEMP DIAG: log every time Nitro's Fabric setter writes onTap so we can
-    // tell whether JS ever reaches this closure. Remove once picking is verified.
-    didSet { NSLog("[Orca] HybridOrcaViewport.onTap set; hasValue=%d", onTap != nil ? 1 : 0) }
-  }
+  var onTap: ((_ x: Double, _ y: Double) -> Void)?
 
   override init() {
     renderer = OrcaViewportRenderer(view: metalView)
     super.init()
     metalView.renderer = renderer
     metalView.onSingleTap = { [weak self] point in
-      // TEMP DIAG: shows whether the singleTap recognizer fired and whether an
-      // onTap callback is currently installed to forward it to JS.
-      NSLog("[Orca] onSingleTap forward: point=(%.1f,%.1f) onTapIsNil=%d",
-            Double(point.x), Double(point.y), self?.onTap == nil ? 1 : 0)
       self?.onTap?(Double(point.x), Double(point.y))
     }
   }

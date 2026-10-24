@@ -25,6 +25,14 @@ apply from: "./fix-prefab.gradle"
 
 if (isNewArchitectureEnabled()) {
   apply plugin: "com.facebook.react"
+  // The codegen scans jsRootDir for TurboModule specs, of which this package has none
+  // (its specs are Nitro's). Left at the package root it walks into the workspace
+  // package's own node_modules/react-native and generates React Native's specs into
+  // this library, a second copy of classes react-android ships, which a release
+  // build's dex merge rejects.
+  react {
+    jsRootDir = file("../src")
+  }
 }
 
 def getExtOrDefault(name) {

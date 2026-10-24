@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker'
 import { Directory, File, Paths } from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
-import { Alert } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import type {
   ImportPresetsResult,
   OrcaSession,
@@ -258,13 +258,18 @@ export async function importPresetFile(
 /** Opens the document picker on preset files and imports the choice. */
 export async function pickAndImportPresets(ctx: ImportContext): Promise<void> {
   const picked = await DocumentPicker.getDocumentAsync({
-    type: [
-      'application/json',
-      'application/zip',
-      PRESET_UTIS.printer,
-      PRESET_UTIS.filament,
-      PRESET_UTIS.bundle,
-    ],
+    // Android reports .orca_* bundles as application/octet-stream and knows none of the
+    // UTIs, so the picker shows every file there and the name decides below.
+    type:
+      Platform.OS === 'android'
+        ? ['*/*']
+        : [
+            'application/json',
+            'application/zip',
+            PRESET_UTIS.printer,
+            PRESET_UTIS.filament,
+            PRESET_UTIS.bundle,
+          ],
     // iCloud and "Open in" hand us security-scoped URLs; a copy in Caches is always readable.
     copyToCacheDirectory: true,
     multiple: false,
@@ -272,6 +277,18 @@ export async function pickAndImportPresets(ctx: ImportContext): Promise<void> {
   const asset = picked.assets?.[0]
   if (picked.canceled || asset === undefined) return
   const path = decodeURIComponent(asset.uri.replace(/^file:\/\//, ''))
+  if (!PRESET_FILE_PATTERN.test(asset.name)) {
+    showToast(
+      `${asset.name} is not a preset file (.orca_printer, .orca_filament, .orca_bundle, .zip or .json).`,
+      'info',
+    )
+    try {
+      new File(path).delete()
+    } catch {
+      /* the cache copy; best effort */
+    }
+    return
+  }
   await importPresetFile(path, ctx)
   try {
     new File(path).delete()
