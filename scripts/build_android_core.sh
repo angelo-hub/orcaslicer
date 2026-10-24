@@ -209,6 +209,7 @@ build_core() {
                 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
                 -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
                 -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
+                -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
                 -DCMAKE_IGNORE_PREFIX_PATH="$CMAKE_IGNORE_PREFIX_PATH" \
                 -DORCA_MOBILE=ON \
                 -DSLIC3R_GUI=0 \
