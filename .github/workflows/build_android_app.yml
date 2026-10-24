@@ -121,7 +121,16 @@ jobs:
           rm -rf "$dest"
           gh run download "$run_id" -n orca-core-android-arm64-v8a -D "$dest"
           test -f "$dest/arm64-v8a/libOrcaCore.a"
-          test -f "$dest/include/OrcaCore/Session.hpp"
+          # A core older than this commit's bridge lacks headers it includes; say so here
+          # rather than in the middle of the Gradle build.
+          missing=$(grep -rhoE '#include <OrcaCore/[^>]+>' packages/orca-core/cpp packages/orca-core/android/src/main/cpp \
+            | sed -E 's/#include <(.*)>/\1/' | sort -u | while read -r header; do
+              [ -f "$dest/include/$header" ] || echo "$header"
+            done)
+          if [ -n "$missing" ]; then
+            echo "::error::The newest Android core (run $run_id, $core_sha) predates this commit: it lacks ${missing//$'\n'/ }. Let 'Build Android core' finish a run with the current façade, then re-run this." >&2
+            exit 1
+          fi
           du -sh "$dest"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "sha=$core_sha" >> "$GITHUB_OUTPUT"
