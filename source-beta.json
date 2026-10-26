@@ -21,6 +21,16 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "0.3.0",
+          "buildVersion": "134",
+          "marketingVersion": "0.3.0-beta.1",
+          "date": "2026-10-26T20:31:52.356Z",
+          "localizedDescription": "Features:\n• Printer-connection plugins as a destination kind\n• Run slicing-pipeline and script plugins\n• Show plugin pages in the app\n• Embed the python plugin runtime in the core\n• Orca cloud plugin catalog behind a feature flag\n• Add the Android module of the Nitro package and an Android app build\n• Build the slicing core for Android with the NDK\n\nFixes:\n• Read the PAL build's version from the ADP manifest\n• Merge OCCT 8's libraries from lib/occt into the core archive\n• Strip debug info from the merged Android archive\n• Keep a capped slice from waiting forever on its thread barrier\n• Restore portrait after fullscreen and drop a doubled percent unit\n• Keep the viewport drawing large toolpaths on a device",
+          "downloadURL": "https://github.com/angelo-hub/orcaslicer/releases/download/mobile-v0.3.0-beta.1/OrcaMobile-0.3.0-beta.1.ipa",
+          "size": 32742267,
+          "minOSVersion": "16.4"
+        },
+        {
           "version": "0.2.1",
           "buildVersion": "69",
           "marketingVersion": "0.2.1-beta.1",
